@@ -17,6 +17,24 @@ window.addEventListener("load", () => {
     "https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js";
   (document.head || document.documentElement).appendChild(script);
   script.onload = () => {
+    (() => {
+      const css = `
+        #injected span {
+          padding: 2px 8px;
+          display: inline;
+        }
+
+        #injected select {
+          width: 60px;
+          height: 30px;
+          line-height: 30px;
+          border-radius: 2px;
+        }
+      `;
+      const style = $("<style>", { type: "text/css" }).html(css);
+      $(document.head || document.documentElement).append(style);
+    })();
+
     const getChapterInfo = () => {
       const title = $("title").text();
       const manga_name_jp = title.match(/(?<=【)[^[【】]+(?=】)/g)[1];
@@ -32,12 +50,54 @@ window.addEventListener("load", () => {
             $(cur).attr("href"),
           ].join("");
           chap_list.push({
-            name: $(cur).text(),
+            number: $(cur).text(),
             url,
           });
         },
       );
       return { chap_list, manga_name };
     };
+
+    // Create menu
+    (() => {
+      const { chap_list } = getChapterInfo();
+      let entry_chap = [],
+        end_chap = [];
+      chap_list.forEach((cur, i) => {
+        entry_chap.push(
+          `<option value="${i}" ${i ? "" : "selected"}>
+            <span>${cur.number}</span>
+          </option>`,
+        );
+        end_chap.push(
+          `<option value="${i}" ${i === chap_list.length - 1 ? "selected" : ""}>
+            <span>${cur.number}</span>
+          </option>`,
+        );
+      });
+      entry_chap.join("\n");
+      end_chap.join("\n");
+      const menu_html = `
+        <div id="injected">
+          <span>开始：</span>
+          <select name="entry" class="uk-select">${entry_chap}</select>
+          <span>结束：</span>
+          <select name="entry" class="uk-select">${end_chap}</select>
+          <br />
+          <div class="mtm">
+            <a href="javascript:;" class="uk-button uk-button-danger" id="mangadl-all">
+              <span>打包下载</span>
+            </a>
+            <a href="javascript:;" class="uk-button uk-button-primary" id="mangadl-retry">
+              <span>重试下载</span>
+            </a>
+            <a href="javascript:;" class="uk-button uk-button-primary" id="mangadl-seperate">
+              <span>分批下载</span>
+            </a>
+          </div>
+        </div>
+      `;
+      $("div.uk-width-expand .uk-margin-left").append(menu_html);
+    })();
   };
 });
