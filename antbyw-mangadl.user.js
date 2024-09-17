@@ -183,33 +183,54 @@ window.addEventListener("load", async () => {
             mangadl.entry_chap,
             mangadl.end_chap + 1,
           );
-
-          let promises = [];
-          mangadl.chap_dllist.forEach((cur) => {
-            promises.push(
-              new Promise(async (res) => {
-                await getImgList(cur);
-                res();
-              }),
-            );
-          });
-          Promise.all(promises).then(() => {
+          limitParDl(mangadl.chap_dllist, getImgList, 2).then(() => {
             mangadl.zip
               .generateAsync({
                 type: "blob",
-                compression: "DEFLATE",
+                compression: "STORE",
               })
               .then((zipFile) => {
                 saveAs(zipFile, `${mangadl.manga_name}.zip`);
                 $("#mangadl-all").removeAttr("dling").text("打包下載");
-                mangadl.init();
               });
           });
         }
 
+        async function limitParDl(items, fn, max_par) {
+          let lock = false;
+          let groups = items.reduce((acc, cur, i) => {
+            !(i % max_par) && acc.push([]);
+            acc[acc.length - 1].push(cur);
+            return acc;
+          }, []);
+          await Promise.all(
+            groups.map(async (cur) => {
+              while (lock) {
+                await new Promise((res) => {
+                  setTimeout(res, 1000);
+                });
+              }
+              lock = true;
+              await Promise.all(
+                cur.map(
+                  (cur) =>
+                    new Promise(async (res) => {
+                      await fn(cur);
+                      res();
+                    }),
+                ),
+              );
+              lock = false;
+            }),
+          );
+        }
+
         async function getImgList(chap) {
-          const dirname = `${mangadl.manga_name}/${chap.number}`;
-          const folder = mangadl.zip.folder(dirname);
+          const toplv_dirname = mangadl.manga_name;
+          const toplv_dir = mangadl.zip.folder(toplv_dirname);
+          const chap_zip = new JSZip();
+          const chap_dirname = chap.number;
+          const chap_dir = chap_zip.folder(chap_dirname);
           await fetchT(chap.url, { method: "GET" }, 10_000)
             .then((res) => {
               if (!res.ok) throw new Error("chapter request failed...");
@@ -228,12 +249,17 @@ window.addEventListener("load", async () => {
                 });
               } else if (!$nodes.find(".jameson_manhua").length) {
                 const filename = "權限不足.txt";
-                folder.file(filename, "權限不足，請登錄賬戶或使用VIP帳戶！\n");
+                chap_dir.file(
+                  filename,
+                  "權限不足，請登錄賬戶或使用VIP帳戶！\n",
+                );
                 genMsgFile(filename);
+                await zipChap();
               } else if (!$nodes.find(".uk-zjimg img").length) {
                 const filename = "VIP專屬.txt";
-                folder.file(filename, "請使用VIP帳戶下載！\n");
+                chap_dir.file(filename, "請使用VIP帳戶下載！\n");
                 genMsgFile(filename);
+                await zipChap();
               } else {
                 const attr = location.hostname.includes("ant")
                   ? "data-src"
@@ -242,17 +268,31 @@ window.addEventListener("load", async () => {
                 $nodes.find(".uk-zjimg img").each((_, cur) => {
                   promises.push(
                     new Promise(async (res) => {
-                      await dlImg($(cur).attr(attr), folder);
+                      await dlImg($(cur).attr(attr), chap_dir);
                       res();
                     }),
                   );
                 });
-                return await Promise.all(promises);
+                await Promise.all(promises);
+                await zipChap();
+                return;
               }
 
+              async function zipChap() {
+                const chap_blob = await chap_zip.generateAsync({
+                  type: "blob",
+                  compression: "DEFLATE",
+                  compressionOptions: {
+                    level: 6,
+                  },
+                });
+                toplv_dir.file(`${chap_dirname}.zip`, chap_blob, {
+                  binary: true,
+                });
+              }
               function genMsgFile(filename) {
-                mangadl.zip
-                  .file(dirname + "/" + filename)
+                chap_zip
+                  .file(`${chap_dirname}/${filename}`)
                   .async("string")
                   .then((data) => console.error(data));
               }
@@ -262,7 +302,7 @@ window.addEventListener("load", async () => {
             });
         }
 
-        async function dlImg(url, folder) {
+        async function dlImg(url, chap_dir) {
           const filename = url.split("/").reverse()[0];
           const f = async (retry = 0) => {
             await fetchT(url, { method: "GET" }, 10_000)
@@ -272,7 +312,7 @@ window.addEventListener("load", async () => {
               })
               .then((res) => {
                 if (res.byteLength > 10)
-                  folder.file(filename, res, { binary: true });
+                  chap_dir.file(filename, res, { binary: true });
                 else throw new Error();
               })
               .catch(async () => {
