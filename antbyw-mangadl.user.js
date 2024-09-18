@@ -265,15 +265,42 @@ window.addEventListener("load", async () => {
                   ? "data-src"
                   : "src";
                 let promises = [];
-                $nodes.find(".uk-zjimg img").each((_, cur) => {
+                const imgs = $nodes.find(".uk-zjimg img");
+                const img_num = imgs.length;
+                const m = (() => {
+                  let missing_pgs = "";
+                  return (str) => {
+                    missing_pgs = [missing_pgs, str].join("\n");
+                    return missing_pgs.trim();
+                  };
+                })();
+                const c = (() => {
+                  let count = 0;
+                  return (flag) => {
+                    !flag && ++count;
+                    return count;
+                  };
+                })();
+                imgs.each((_, cur) => {
                   promises.push(
                     new Promise(async (res) => {
-                      await dlImg($(cur).attr(attr), chap_dir);
+                      await dlImg($(cur).attr(attr), chap_dir, c, m);
                       res();
                     }),
                   );
                 });
                 await Promise.all(promises);
+                try {
+                  if (!c(true)) console.log(`${chap_dirname}: all clear!`);
+                  else
+                    throw new Error(
+                      `${chap_dirname}缺失頁：${c(true)}/${img_num}`,
+                    );
+                } catch (e) {
+                  console.error(e.message);
+                  const filename = "不完整下載.txt";
+                  chap_dir.file(filename, fmtLogs(`${e.message}\n${m()}`));
+                }
                 await zipChap();
                 return;
               }
@@ -302,7 +329,7 @@ window.addEventListener("load", async () => {
             });
         }
 
-        async function dlImg(url, chap_dir) {
+        async function dlImg(url, chap_dir, c, m) {
           const filename = url.split("/").reverse()[0];
           const f = async (retry = 0) => {
             await fetchT(url, { method: "GET" }, 10_000)
@@ -316,10 +343,29 @@ window.addEventListener("load", async () => {
                 else throw new Error();
               })
               .catch(async () => {
-                retry < 3 && (await f(++retry));
+                if (retry < 3) await f(++retry);
+                else {
+                  c();
+                  m(filename);
+                }
               });
           };
           await f();
+        }
+
+        function fmtLogs(msg) {
+          const lines = msg.trim().split("\n");
+          const gist = lines.slice(0, 1);
+          const content = lines
+            .slice(1)
+            .sort()
+            .reduce((acc, cur, i) => {
+              !(i % 5) && acc.push([]);
+              acc[acc.length - 1].push(cur.padStart(10, " "));
+              return acc;
+            }, [])
+            .map((cur) => cur.join(""));
+          return [...gist, ...content].join("\n");
         }
 
         function fetchT(url, options, timeout) {
