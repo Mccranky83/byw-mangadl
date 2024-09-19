@@ -183,7 +183,8 @@ window.addEventListener("load", async () => {
             mangadl.entry_chap,
             mangadl.end_chap + 1,
           );
-          limitParDl(mangadl.chap_dllist, getImgList, 2).then(() => {
+
+          limitParDl(mangadl.chap_dllist, getImgList, [], 5).then(() => {
             mangadl.zip
               .generateAsync({
                 type: "blob",
@@ -196,31 +197,34 @@ window.addEventListener("load", async () => {
           });
         }
 
-        async function limitParDl(items, fn, max_par) {
-          let lock = false;
-          let groups = items.reduce((acc, cur, i) => {
-            !(i % max_par) && acc.push([]);
-            acc[acc.length - 1].push(cur);
-            return acc;
-          }, []);
+        class Semaphore {
+          constructor(max_par) {
+            this.counter = max_par;
+            this.waitlist = [];
+          }
+          async acquire() {
+            if (this.counter > 0) {
+              this.counter--;
+              return;
+            }
+            await new Promise((res) => this.waitlist.push(res));
+          }
+
+          release() {
+            this.counter++;
+            if (this.waitlist.length > 0) {
+              this.counter--;
+              this.waitlist.shift()();
+            }
+          }
+        }
+
+        async function limitParDl(items, fn, args, max_par) {
+          const s = new Semaphore(max_par);
           await Promise.all(
-            groups.map(async (cur) => {
-              while (lock) {
-                await new Promise((res) => {
-                  setTimeout(res, 1000);
-                });
-              }
-              lock = true;
-              await Promise.all(
-                cur.map(
-                  (cur) =>
-                    new Promise(async (res) => {
-                      await fn(cur);
-                      res();
-                    }),
-                ),
-              );
-              lock = false;
+            items.map(async (cur) => {
+              await s.acquire();
+              await fn(cur, ...args).finally(s.release.bind(s));
             }),
           );
         }
@@ -261,11 +265,7 @@ window.addEventListener("load", async () => {
                 genMsgFile(filename);
                 await zipChap();
               } else {
-                const attr = location.hostname.includes("ant")
-                  ? "data-src"
-                  : "src";
-                let promises = [];
-                const imgs = $nodes.find(".uk-zjimg img");
+                const imgs = $nodes.find(".uk-zjimg img").toArray();
                 const img_num = imgs.length;
                 const m = (() => {
                   let missing_pgs = "";
@@ -281,15 +281,7 @@ window.addEventListener("load", async () => {
                     return count;
                   };
                 })();
-                imgs.each((_, cur) => {
-                  promises.push(
-                    new Promise(async (res) => {
-                      await dlImg($(cur).attr(attr), chap_dir, c, m);
-                      res();
-                    }),
-                  );
-                });
-                await Promise.all(promises);
+                await limitParDl(imgs, dlImg, [chap_dir, c, m], 20);
                 try {
                   if (!c(true)) console.log(`${chap_dirname}: all clear!`);
                   else
@@ -329,7 +321,9 @@ window.addEventListener("load", async () => {
             });
         }
 
-        async function dlImg(url, chap_dir, c, m) {
+        async function dlImg(img, chap_dir, c, m) {
+          const attr = location.hostname.includes("ant") ? "data-src" : "src";
+          const url = $(img).attr(attr);
           const filename = url.split("/").reverse()[0];
           const f = async (retry = 0) => {
             await fetchT(url, { method: "GET" }, 10_000)
@@ -343,8 +337,12 @@ window.addEventListener("load", async () => {
                 else throw new Error();
               })
               .catch(async () => {
-                if (retry < 3) await f(++retry);
-                else {
+                if (retry < 3) {
+                  await new Promise((res) => {
+                    setTimeout(res, 5_000);
+                  });
+                  await f(++retry);
+                } else {
                   c();
                   m(filename);
                 }
@@ -371,7 +369,7 @@ window.addEventListener("load", async () => {
         function fetchT(url, options, timeout) {
           const c = new AbortController();
           const signal = c.signal;
-          const fetch_p = fetch(url, { ...options, signal });
+          const fetch_p = fetch(url, { ...options, signal }).catch(() => {});
           const timeout_p = new Promise((_, rej) => {
             setTimeout(() => {
               c.abort();
