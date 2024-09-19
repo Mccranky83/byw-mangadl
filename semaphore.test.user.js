@@ -2,9 +2,9 @@
 // @name         测试信号量
 // @namespace    http://tampermonkey.net/
 // @version      2024-09-19
-// @description  Test out the
+// @description  Test out new semaphore class
 // @author       mccranky
-// @match        https://cn.bing.com/
+// @match        https://cn.bing.com/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=bing.com
 // @grant        none
 // ==/UserScript==

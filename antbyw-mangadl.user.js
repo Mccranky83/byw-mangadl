@@ -40,9 +40,12 @@ window.addEventListener("load", async () => {
             this.chap_info = this.getChapterInfo();
             this.manga_name = this.chap_info.manga_name;
             this.chap_list = this.chap_info.chap_list;
+            this.chap_num = this.chap_list.length;
             this.chap_dllist = [];
             this.entry_chap = 0;
             this.end_chap = 0;
+            this.max_chap_par = 0;
+            this.max_img_par = 0;
             this.dling = false;
             this.zip = {};
           }
@@ -51,6 +54,8 @@ window.addEventListener("load", async () => {
             this.dling = false;
             this.entry_chap = 0;
             this.end_chap = 0;
+            this.max_chap_par = 0;
+            this.max_img_par = 0;
             this.zip = new JSZip();
           }
           getChapterInfo() {
@@ -110,19 +115,50 @@ window.addEventListener("load", async () => {
                 ${cur.number}
               </option>`);
             end.push(`
-              <option value="${i}" ${i === mangadl.chap_list.length - 1 ? "selected" : ""}>
+              <option value="${i}" ${i === mangadl.chap_num - 1 ? "selected" : ""}>
                 ${cur.number}
               </option>`);
           });
+          const MAX_CHAP_PAR = 5;
+          const MAX_IMG_PAR_MULTI = 4;
+          const chap_par = [...Array(MAX_CHAP_PAR)].map(
+            (_, i) => `
+              <option value=${i + 1} ${i === MAX_CHAP_PAR - 1 ? "selected" : ""}>${i + 1}</option>
+            `,
+          );
+          const img_par = [...Array(MAX_IMG_PAR_MULTI)].map(
+            (_, i) => `
+              <option value=${(i + 1) * 5} ${i === MAX_IMG_PAR_MULTI - 1 ? "selected" : ""}>${(i + 1) * 5}</option>
+            `,
+          );
           entry.join("\n");
           end.join("\n");
           const menu_html = `
             <div id="injected">
-              <span>開始：</span>
-              <select name="entry" class="uk-select">${entry}</select>
-              <span>結束：</span>
-              <select name="end" class="uk-select">${end}</select>
-              <br />
+              <div>
+                <span>開始：</span>
+                <select name="entry" class="uk-select">${entry}</select>
+                <span>結束：</span>
+                <select name="end" class="uk-select">${end}</select>
+              </div>
+              <div class="tooltip-container">
+                <span>併發章節數：</span>
+                <select name="chap-par" class="uk-select">${chap_par}</select>
+                <button class="tooltip-button">?</button>
+                <div class="tooltip-text">
+                  <p>Bigger the value, larger the number of concurrent chapter fetches. But because the browser can only handle a limited number of concurrent requests, it is recommended to use the options listed below.</p>
+                  <p>數值越大，同時下載章節的數量就越多。但由於瀏覽器只能處理有限的並發請求，建議使用以下選項。</p>
+                </div>
+              </div>
+              <div class="tooltip-container">
+                <span>併發圖片數：</span>
+                <select name="img-par" class="uk-select">${img_par}</select>
+                <button class="tooltip-button">?</button>
+                <div class="tooltip-text">
+                  <p>Bigger the value, larger the number of concurrent image fetches. But because the browser can only handle a limited number of concurrent requests, it is recommended to use the options listed below.</p>
+                  <p>數值越大，同時下載圖片的數量就越多。但由於瀏覽器只能處理有限的並發請求，建議使用以下選項。</p>
+                </div>
+              </div>
               <div class="mtm">
                 <a href="javascript:;" class="uk-button uk-button-danger" id="mangadl-all">
                   <span>打包下載</span>
@@ -146,12 +182,58 @@ window.addEventListener("load", async () => {
                 padding: 2px 8px;
                 display: inline;
               }
-
               #injected select {
                 width: 80px;
                 height: 30px;
                 line-height: 30px;
                 border-radius: 2px;
+              }
+              .tooltip-container {
+                  position: relative;
+                  display: inline-block;
+                  margin-top: 10px;
+              }
+              .tooltip-button {
+                  width: 20px;
+                  height: 20px;
+                  border-radius: 50%;
+                  background-color: #007bff;
+                  color: white;
+                  border: none;
+                  font-size: 10px;
+                  text-align: center;
+                  line-height: 20px;
+                  cursor: pointer;
+                  display: inline-flex;
+                  align-items: center;
+                  justify-content: center;
+              }
+              .tooltip-text {
+                  visibility: hidden;
+                  width: 250px;
+                  background-color: #555;
+                  color: #fff;
+                  text-align: left;
+                  border-radius: 5px;
+                  padding: 10px;
+                  position: absolute;
+                  z-index: 1;
+                  bottom: 125%;
+                  left: 50%;
+                  margin-left: -60px;
+                  opacity: 0;
+                  transition: opacity 0.3s;
+                  white-space: normal;
+              } 
+              .tooltip-container:hover .tooltip-text {
+                  visibility: visible;
+                  opacity: 1;
+              }
+              .tooltip-text p {
+                  margin: 0 0 10px;
+              } 
+              .tooltip-text p:last-child {
+                  margin-bottom: 0;
               }
             `;
             const style = $("<style>", { type: "text/css" }).html(css);
@@ -169,8 +251,11 @@ window.addEventListener("load", async () => {
             $("#mangadl-all").attr("dling", mangadl.dling).text("下載中");
           }
 
+          // Fetch select values
           mangadl.entry_chap = Number($("#injected [name='entry']").val());
           mangadl.end_chap = Number($("#injected [name='end']").val());
+          mangadl.max_chap_par = Number($("#injected [name='chap-par']").val());
+          mangadl.max_img_par = Number($("#injected [name='img-par']").val());
 
           if (mangadl.entry_chap > mangadl.end_chap) {
             [mangadl.entry_chap, mangadl.end_chap] = [
@@ -184,7 +269,12 @@ window.addEventListener("load", async () => {
             mangadl.end_chap + 1,
           );
 
-          limitParDl(mangadl.chap_dllist, getImgList, [], 5).then(() => {
+          limitParDl(
+            mangadl.chap_dllist,
+            getImgList,
+            [],
+            mangadl.max_chap_par,
+          ).then(() => {
             mangadl.zip
               .generateAsync({
                 type: "blob",
@@ -281,7 +371,12 @@ window.addEventListener("load", async () => {
                     return count;
                   };
                 })();
-                await limitParDl(imgs, dlImg, [chap_dir, c, m], 20);
+                await limitParDl(
+                  imgs,
+                  dlImg,
+                  [chap_dir, c, m],
+                  mangadl.max_img_par,
+                );
                 try {
                   if (!c(true)) console.log(`${chap_dirname}: all clear!`);
                   else
