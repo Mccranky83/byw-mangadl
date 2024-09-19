@@ -281,7 +281,10 @@ window.addEventListener("load", async () => {
                 compression: "STORE",
               })
               .then((zipFile) => {
-                saveAs(zipFile, `${mangadl.manga_name}.zip`);
+                saveAs(
+                  zipFile,
+                  `${mangadl.manga_name} (${mangadl.entry_chap + 1}${mangadl.end_chap !== mangadl.entry_chap ? "-" + mangadl.end_chap + 1 : ""}).zip`,
+                );
                 $("#mangadl-all").removeAttr("dling").text("打包下載");
               });
           });
