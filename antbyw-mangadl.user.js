@@ -220,12 +220,15 @@ window.addEventListener("load", async () => {
               $sidebar.removeClass("active");
               $sidebarBtn.removeClass("hidden");
             });
-            // Use pageX/Y to get absolute position
-            function onMouseMove({ pageX, pageY }) {
+            /**
+             * pageX/Y returns the absolute position
+             * Use clientX/Y instead
+             */
+            function onMouseMove({ clientX, clientY }) {
               dragging = true;
               $sidebarBtn.css({
-                left: pageX - shiftX + "px",
-                top: pageY - shiftY + "px",
+                left: clientX - shiftX + "px",
+                top: clientY - shiftY + "px",
               });
             }
           });
