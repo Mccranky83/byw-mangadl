@@ -347,7 +347,7 @@ window.addEventListener("load", async () => {
                   top: 100%;
                   white-space: normal;
               } 
-              .tooltip-container:hover .tooltip-text {
+              .tooltip-button:hover + .tooltip-text {
                   visibility: visible;
                   opacity: 1;
               }
