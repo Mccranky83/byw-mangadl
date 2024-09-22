@@ -105,8 +105,133 @@ window.addEventListener("load", async () => {
         }
 
         const mangadl = new MangaDl();
-        // Creating menu
-        (() => {
+        createSidebar();
+        createMenu();
+
+        function createSidebar() {
+          const html = `
+            <button id="sidebar-open-btn">菜單</button>
+            <div id="uk-sidebar">
+              <div class="titlebar">
+                <button id="sidebar-close-btn">&times;</button>
+                <h2>菜單</h2>
+              </div>
+              <div class="uk-container"></div>
+            </div>
+          `;
+          const css = `
+            #sidebar-open-btn {
+              --sidebar-diameter: 50px;
+              position: fixed;
+              top: 50%;
+              right: 0%;
+              width: var(--sidebar-diameter);
+              height: var(--sidebar-diameter);
+              font-size: 16px;
+              border-radius: 50%;
+              background-color: #007bff;
+              color: white;
+              border: none;
+              cursor: pointer;
+              z-index: 1000;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            } 
+            #sidebar-open-btn.hidden {
+              display: none;
+            }
+            #uk-sidebar {
+              position: fixed;
+              top: 0;
+              right: -100%;
+              width: 30%;
+              max-width: 50%;
+              height: 100%;
+              background-color: white;
+              color: black;
+              padding: 20px;
+              transition: right 0.3s ease;
+              box-shadow: -2px 0 5px rgba(0, 0, 0, 0.5);
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              align-items: center;
+            }
+            #uk-sidebar .titlebar {
+              font-size: 25px;
+              margin-bottom: auto;
+            }
+            #uk-sidebar .uk-container {
+              margin-top: 10%;
+              flex-grow: 1;
+            }
+            #uk-sidebar.active {
+              right: 0%;
+            }
+            #sidebar-close-btn {
+              position: absolute;
+              top: 10px;
+              right: 20px;
+              font-size: 30px;
+              background: none;
+              border: none;
+              color: black;
+              cursor: pointer;
+            }
+          `;
+          const styles = $("<style>", { tyle: "text/css" }).html(css);
+          $("body").css({
+            "overflow-x": "hidden",
+          });
+          $("body:last-child").after(html);
+          $(document.head).append(styles);
+
+          let dragging = false;
+          const $sidebar = $("#uk-sidebar");
+          const $sidebarBtn = $("#sidebar-open-btn");
+          const $closeBtn = $("#sidebar-close-btn");
+
+          $sidebarBtn.on("mousedown", ({ clientX, clientY }) => {
+            // Calculate offset between mouse and element border
+            const btn_rect = $sidebarBtn[0].getBoundingClientRect();
+            const shiftX = clientX - btn_rect.left;
+            const shiftY = clientY - btn_rect.top;
+
+            $(document).on("mousemove", onMouseMove);
+            $(document).on("keydown", ({ key }) => {
+              if (key === "Escape") {
+                $sidebar.removeClass("active");
+                $sidebarBtn.removeClass("hidden");
+              }
+            });
+            $sidebarBtn.on("mouseup", () => {
+              if (!dragging) {
+                $sidebar.addClass("active");
+                $sidebarBtn.addClass("hidden");
+              } else dragging = false;
+              $(document).off("mousemove", onMouseMove);
+              $sidebarBtn.off("mouseup");
+            });
+
+            $closeBtn.on("click", () => {
+              $sidebar.removeClass("active");
+              $sidebarBtn.removeClass("hidden");
+            });
+            // Use pageX/Y to get absolute position
+            function onMouseMove({ pageX, pageY }) {
+              dragging = true;
+              $sidebarBtn.css({
+                left: pageX - shiftX + "px",
+                top: pageY - shiftY + "px",
+              });
+            }
+          });
+        }
+
+        function createMenu() {
           let entry = [],
             end = [];
           mangadl.chap_list.forEach((cur, i) => {
@@ -172,7 +297,7 @@ window.addEventListener("load", async () => {
               </div>
             </div>
       `;
-          $("div.uk-width-expand .uk-margin-left").append(menu_html);
+          $("div#uk-sidebar .uk-container").append(menu_html);
           $("#mangadl-all").on("click", dlAll);
 
           // Adding css styles
@@ -218,11 +343,8 @@ window.addEventListener("load", async () => {
                   padding: 10px;
                   position: absolute;
                   z-index: 1;
-                  bottom: 125%;
-                  left: 50%;
-                  margin-left: -60px;
-                  opacity: 0;
-                  transition: opacity 0.3s;
+                  right: 0%;
+                  top: 100%;
                   white-space: normal;
               } 
               .tooltip-container:hover .tooltip-text {
@@ -239,7 +361,7 @@ window.addEventListener("load", async () => {
             const style = $("<style>", { type: "text/css" }).html(css);
             $(document.head || document.documentElement).append(style);
           })();
-        })();
+        }
 
         function dlAll() {
           if ($("#mangadl-all").attr("dling")) {
