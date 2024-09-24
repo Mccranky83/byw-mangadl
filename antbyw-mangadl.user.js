@@ -56,6 +56,7 @@ window.addEventListener("load", async () => {
             this.end_chap = 0;
             this.max_chap_par = 0;
             this.max_img_par = 0;
+            this.chap_dllist = [];
             this.zip = new JSZip();
           }
           getChapterInfo() {
@@ -107,6 +108,7 @@ window.addEventListener("load", async () => {
         const mangadl = new MangaDl();
         createSidebar();
         createMenu();
+        manualSelect();
 
         function createSidebar() {
           const html = `
@@ -155,6 +157,7 @@ window.addEventListener("load", async () => {
               padding: 20px;
               transition: right 0.3s ease;
               box-shadow: -2px 0 5px rgba(0, 0, 0, 0.5);
+              z-index: 100;
               display: flex;
               flex-direction: column;
               justify-content: center;
@@ -201,8 +204,8 @@ window.addEventListener("load", async () => {
             const shiftY = clientY - btn_rect.top;
 
             $(document).on("mousemove", onMouseMove);
-            $(document).on("keydown", ({ key }) => {
-              if (key === "Escape") {
+            $(document).on("keydown", ({ key, ctrlKey }) => {
+              if (key === "q" && ctrlKey) {
                 $sidebar.removeClass("active");
                 $sidebarBtn.removeClass("hidden");
               }
@@ -222,7 +225,8 @@ window.addEventListener("load", async () => {
             });
             /**
              * pageX/Y returns the absolute position
-             * Use clientX/Y instead
+             * However, $sidebarBtn's position is fixed
+             * Using clientX/Y instead
              */
             function onMouseMove({ clientX, clientY }) {
               dragging = true;
@@ -297,6 +301,9 @@ window.addEventListener("load", async () => {
                 <a href="javascript:;" class="uk-button uk-button-primary" id="mangadl-seperate">
                   <span>分批下載</span>
                 </a>
+                <a href="javascript:;" class="uk-button uk-button-primary" id="manual-select">
+                  <span>手動選擇</span>
+                </a>
               </div>
             </div>
       `;
@@ -345,7 +352,7 @@ window.addEventListener("load", async () => {
                   border-radius: 5px;
                   padding: 10px;
                   position: absolute;
-                  z-index: 1;
+                  z-index: 500;
                   right: 0%;
                   top: 100%;
                   white-space: normal;
@@ -366,6 +373,69 @@ window.addEventListener("load", async () => {
           })();
         }
 
+        function manualSelect() {
+          const html = `
+            <div id="cursor-pointer"> </div>
+          `;
+          const css = `
+            #cursor-pointer {
+              position: fixed;
+              pointer-events: none;
+              display: none;
+            }
+            #cursor-pointer {
+              --cursor-diameter: 20px;
+              width: var(--cursor-diameter);
+              height: var(--cursor-diameter);
+              border-radius: 50%;
+              background-color: blue;
+              opacity: 0.5;
+            }
+          `;
+          $(document.body).append(html);
+          $("<style>", { type: "text/css" }).html(css).appendTo(document.head);
+
+          const $button = $("#manual-select");
+          const $cursor = $("#cursor-pointer");
+          let f = false;
+          $button.on("click", (e) => {
+            !f ? showCursor(e) : hideCursor();
+          });
+          $(document).on("mousemove", ({ clientX, clientY }) => {
+            if (f) {
+              $("#cursor-pointer").css({
+                left: clientX - 10 + "px",
+                top: clientY - 10 + "px",
+              });
+            }
+          });
+          $(document).on("keydown", ({ key }) => {
+            key === "Escape" && hideCursor();
+          });
+          $(document).on("click", ".muludiv", function (e) {
+            if (f) {
+              e.preventDefault();
+              $(e.currentTarget)[0].style.backgroundColor
+                ? $(this).css("background-color", "")
+                : $(this).css("background-color", "#7fbbb3");
+            }
+          });
+
+          function showCursor({ clientX, clientY }) {
+            f = true;
+            $cursor.show();
+            $cursor.css({
+              left: clientX - 10 + "px",
+              top: clientY - 10 + "px",
+            });
+          }
+
+          function hideCursor() {
+            f = false;
+            $cursor.hide();
+          }
+        }
+
         function dlAll() {
           if ($("#mangadl-all").attr("dling")) {
             $("#mangadl-all").text("下載中稍等..");
@@ -377,42 +447,43 @@ window.addEventListener("load", async () => {
           }
 
           // Fetch select values
-          mangadl.entry_chap = Number($("#injected [name='entry']").val());
-          mangadl.end_chap = Number($("#injected [name='end']").val());
+          $(".muludiv").each((i, cur) => {
+            $(cur).css("background-color") === "rgb(127, 187, 179)" &&
+              mangadl.chap_dllist.push(mangadl.chap_list[i]);
+          });
+
+          if (!mangadl.chap_dllist.length) {
+            mangadl.entry_chap = Number($("#injected [name='entry']").val());
+            mangadl.end_chap = Number($("#injected [name='end']").val());
+            if (mangadl.entry_chap > mangadl.end_chap) {
+              [mangadl.entry_chap, mangadl.end_chap] = [
+                mangadl.end_chap,
+                mangadl.entry_chap,
+              ];
+            }
+            mangadl.chap_dllist = mangadl.chap_list.slice(
+              mangadl.entry_chap,
+              mangadl.end_chap + 1,
+            );
+          }
           mangadl.max_chap_par = Number($("#injected [name='chap-par']").val());
           mangadl.max_img_par = Number($("#injected [name='img-par']").val());
 
-          if (mangadl.entry_chap > mangadl.end_chap) {
-            [mangadl.entry_chap, mangadl.end_chap] = [
-              mangadl.end_chap,
-              mangadl.entry_chap,
-            ];
-          }
-
-          mangadl.chap_dllist = mangadl.chap_list.slice(
-            mangadl.entry_chap,
-            mangadl.end_chap + 1,
-          );
-
-          limitParDl(
-            mangadl.chap_dllist,
-            getImgList,
-            [],
-            mangadl.max_chap_par,
-          ).then(() => {
-            mangadl.zip
-              .generateAsync({
-                type: "blob",
-                compression: "STORE",
-              })
-              .then((zipFile) => {
-                saveAs(
-                  zipFile,
-                  `${mangadl.manga_name} (${mangadl.entry_chap + 1}${mangadl.end_chap !== mangadl.entry_chap ? "-" + mangadl.end_chap + 1 : ""}).zip`,
-                );
-                $("#mangadl-all").removeAttr("dling").text("打包下載");
-              });
-          });
+          limitParDl(mangadl.chap_dllist, getImgList, [], mangadl.max_chap_par)
+            .then(() => {
+              mangadl.zip
+                .generateAsync({
+                  type: "blob",
+                  compression: "STORE",
+                })
+                .then((zipFile) => {
+                  saveAs(zipFile, `${mangadl.manga_name}.zip`);
+                  $("#mangadl-all").removeAttr("dling").text("打包下載");
+                });
+            })
+            .finally(() => {
+              $(".muludiv").css("background-color", "");
+            });
         }
 
         class Semaphore {
