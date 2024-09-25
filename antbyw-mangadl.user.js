@@ -157,7 +157,7 @@ window.addEventListener("load", async () => {
               padding: 20px;
               transition: right 0.3s ease;
               box-shadow: -2px 0 5px rgba(0, 0, 0, 0.5);
-              z-index: 100;
+              z-index: 1000;
               display: flex;
               flex-direction: column;
               justify-content: center;
@@ -361,7 +361,7 @@ window.addEventListener("load", async () => {
                   border-radius: 5px;
                   padding: 10px;
                   position: absolute;
-                  z-index: 500;
+                  z-index: 1500;
                   right: 0%;
                   top: 100%;
                   white-space: normal;
@@ -384,11 +384,16 @@ window.addEventListener("load", async () => {
 
         function manualSelect() {
           const html = `
-            <div id="cursor-pointer"> </div>
+            <div id="cursor-pointer"></div>
+            <div id="vertical-line"></div>
+            <div id="horizontal-line"></div>
           `;
           const css = `
-            #cursor-pointer {
+            #cursor-pointer,
+            #vertical-line,
+            #horizontal-line {
               position: fixed;
+              z-index: 2000;
               pointer-events: none;
               display: none;
             }
@@ -399,6 +404,47 @@ window.addEventListener("load", async () => {
               border-radius: 50%;
               background-color: blue;
               opacity: 0.5;
+            } 
+            #vertical-line,
+            #horizontal-line {
+              background-color: blue;
+              opacity: 0.5;
+            }
+            #vertical-line {
+              width: 1px;
+              top: 0;
+              bottom: 0;
+              left: 50%;
+              transform: translateX(-50%);
+              background: linear-gradient(blue 50%, transparent 50%);
+              background-size: 100% 20px;
+              animation: moveDown 1s linear infinite;
+            }
+            #horizontal-line {
+              height: 1px;
+              left: 0;
+              right: 0;
+              top: 50%;
+              transform: translateY(-50%);
+              background: linear-gradient(to right, blue 50%, transparent 50%);
+              background-size: 20px 100%;
+              animation: moveRight 1s linear infinite;
+            } 
+            @keyframes moveDown {
+              0% {
+                background-position: 0 0;
+              }
+              100% {
+                background-position: 0 20px;
+              }
+            } 
+            @keyframes moveRight {
+              0% {
+                background-position: 0 0;
+              }
+              100% {
+                background-position: 20px 0;
+              }
             }
           `;
           $(document.body).append(html);
@@ -406,16 +452,21 @@ window.addEventListener("load", async () => {
 
           const $button = $("#manual-select");
           const $cursor = $("#cursor-pointer");
+          const $vline = $("#vertical-line");
+          const $hline = $("#horizontal-line");
           let f = false;
+
           $button.on("click", (e) => {
             !f ? showCursor(e) : hideCursor();
           });
           $(document).on("mousemove", ({ clientX, clientY }) => {
             if (f) {
-              $("#cursor-pointer").css({
+              $cursor.css({
                 left: clientX - 10 + "px",
                 top: clientY - 10 + "px",
               });
+              $vline.css({ left: clientX + "px" });
+              $hline.css({ top: clientY + "px" });
             }
           });
           $(document).on("keydown", ({ key }) => {
@@ -433,15 +484,21 @@ window.addEventListener("load", async () => {
           function showCursor({ clientX, clientY }) {
             f = true;
             $cursor.show();
+            $vline.show();
+            $hline.show();
             $cursor.css({
               left: clientX - 10 + "px",
               top: clientY - 10 + "px",
             });
+            $vline.css({ left: clientX + "px" });
+            $hline.css({ top: clientY + "px" });
           }
 
           function hideCursor() {
             f = false;
             $cursor.hide();
+            $vline.hide();
+            $hline.hide();
           }
         }
 
