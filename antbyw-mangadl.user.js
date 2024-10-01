@@ -53,6 +53,9 @@ window.addEventListener("load", async () => {
           }
 
           init() {
+            if (!$("#mangadl-retry").attr("class").includes("none")) {
+              $("#mangadl-retry").addClass("none");
+            }
             this.dling = false;
             this.entry_chap = 0;
             this.end_chap = 0;
@@ -60,6 +63,7 @@ window.addEventListener("load", async () => {
             this.max_img_par = 0;
             this.chap_dllist = [];
             this.zip = new JSZip();
+            console.clear();
           }
           getChapterInfo() {
             const title = $(".uk-switcher .uk-heading-line").text();
@@ -302,11 +306,11 @@ window.addEventListener("load", async () => {
                   <p>數值越大，同時下載圖片的數量就越多。但由於瀏覽器只能處理有限的並發請求，建議使用以下選項。</p>
                 </div>
               </div>
-              <div class="mtm">
+              <div class="mtm grid-container">
                 <a href="javascript:;" class="uk-button uk-button-danger" id="mangadl-all">
                   <span>打包下載</span>
                 </a>
-                <a href="javascript:;" class="uk-button uk-button-primary none" id="mangadl-retry">
+                <a href="javascript:;" class="uk-button uk-button-primary none" style="background-color: black;" id="mangadl-retry">
                   <span>重新下載</span>
                 </a>
                 <a href="javascript:;" class="uk-button uk-button-primary" id="mangadl-seperate">
@@ -320,6 +324,7 @@ window.addEventListener("load", async () => {
       `;
           $("div#uk-sidebar .uk-container").append(menu_html);
           $("#mangadl-all").on("click", dlAll);
+          $("#mangadl-retry").on("click", dl);
 
           // Adding css styles
           (() => {
@@ -333,6 +338,20 @@ window.addEventListener("load", async () => {
                 height: 30px;
                 line-height: 30px;
                 border-radius: 2px;
+              }
+              .grid-container {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 2%;
+              }
+              .grid-container .uk-button {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 5vh;
+                text-align: center;
+                padding: 2%;
+                box-sizing: border-box;
               }
               .tooltip-container {
                   position: relative;
@@ -538,6 +557,10 @@ window.addEventListener("load", async () => {
           mangadl.max_chap_par = Number($("#injected [name='chap-par']").val());
           mangadl.max_img_par = Number($("#injected [name='img-par']").val());
 
+          dl();
+        }
+
+        function dl() {
           limitParDl(mangadl.chap_dllist, getImgList, [], mangadl.max_chap_par)
             .then(() => {
               mangadl.zip
@@ -548,6 +571,7 @@ window.addEventListener("load", async () => {
                 .then((zipFile) => {
                   saveAs(zipFile, `${mangadl.manga_name}.zip`);
                   $("#mangadl-all").removeAttr("dling").text("打包下載");
+                  $("#mangadl-retry").removeClass("none");
                 });
             })
             .finally(() => {
@@ -595,8 +619,10 @@ window.addEventListener("load", async () => {
           const chap_dir = chap_zip.folder(chap_dirname);
           await fetchT(chap.url, { method: "GET" }, 10_000)
             .then((res) => {
-              if (!res.ok) throw new Error("chapter request failed...");
-              else console.log("chapter request successful...");
+              if (!res.ok)
+                throw new Error(`${chap_dirname}: chapter request failed...`);
+              else
+                console.log(`${chap_dirname}: chapter request successful...`);
               return res.text();
             })
             .then(async (res) => {
@@ -692,6 +718,7 @@ window.addEventListener("load", async () => {
           const timeout = 10_000;
           const wait = 5_000;
           const retry = 3;
+          const hide_retry_logs = true; // Pending feature
           if (location.href.includes("ant")) await ant_f();
           else await zero_f();
 
@@ -710,6 +737,8 @@ window.addEventListener("load", async () => {
                 if (r < retry) {
                   await new Promise((res) => {
                     setTimeout(res, wait);
+                    hide_retry_logs &&
+                      console.log(`${filename}重試次數: ${r + 1}/${retry}次`);
                   });
                   await ant_f(++r);
                 } else {
