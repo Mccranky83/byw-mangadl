@@ -9,7 +9,9 @@
 // @match        https://*/plugin.php?id=jameson_manhua*a=bofang*kuid*
 // @match        https://*/plugin.php?id=jameson_manhua*kuid*a=bofang*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=antbyw.com
-// @grant        none
+// @grant        GM_xmlhttpRequest
+// @connect      zerobywz.com
+// @connect      antbyw.com
 // ==/UserScript==
 
 "use strict";
@@ -656,37 +658,44 @@ window.addEventListener("load", async () => {
                 await zipChap();
                 return;
               }
-
-              async function zipChap() {
-                const chap_blob = await chap_zip.generateAsync({
-                  type: "blob",
-                  compression: "DEFLATE",
-                  compressionOptions: {
-                    level: 6,
-                  },
-                });
-                toplv_dir.file(`${chap_dirname}.zip`, chap_blob, {
-                  binary: true,
-                });
-              }
-              function genMsgFile(filename) {
-                chap_zip
-                  .file(`${chap_dirname}/${filename}`)
-                  .async("string")
-                  .then((data) => console.error(data));
-              }
             })
             .catch((e) => {
               console.error(e.message);
             });
+
+          async function zipChap() {
+            const chap_blob = await chap_zip.generateAsync({
+              type: "blob",
+              compression: "DEFLATE",
+              compressionOptions: {
+                level: 6,
+              },
+            });
+            toplv_dir.file(`${chap_dirname}.zip`, chap_blob, {
+              binary: true,
+            });
+          }
+
+          function genMsgFile(filename) {
+            chap_zip
+              .file(`${chap_dirname}/${filename}`)
+              .async("string")
+              .then((data) => console.error(data));
+          }
         }
 
         async function dlImg(img, chap_dir, c, m) {
           const attr = location.hostname.includes("ant") ? "data-src" : "src";
           const url = $(img).attr(attr);
           const filename = url.split("/").reverse()[0];
-          const f = async (retry = 0) => {
-            await fetchT(url, { method: "GET" }, 10_000)
+          const timeout = 10_000;
+          const wait = 5_000;
+          const retry = 3;
+          if (location.href.includes("ant")) await ant_f();
+          else await zero_f();
+
+          async function ant_f(r = 0) {
+            await fetchT(url, { method: "GET" }, timeout)
               .then((res) => {
                 if (!res.ok) throw new Error();
                 else return res.arrayBuffer();
@@ -697,18 +706,46 @@ window.addEventListener("load", async () => {
                 else throw new Error();
               })
               .catch(async () => {
-                if (retry < 3) {
+                if (r < retry) {
                   await new Promise((res) => {
-                    setTimeout(res, 5_000);
+                    setTimeout(res, wait);
                   });
-                  await f(++retry);
+                  await ant_f(++r);
                 } else {
                   c();
                   m(filename);
                 }
               });
-          };
-          await f();
+          }
+
+          async function zero_f(r = 0) {
+            await new Promise(async (resolve, reject) => {
+              GM_xmlhttpRequest({
+                method: "GET",
+                url,
+                responseType: "arraybuffer",
+                timeout,
+                onload: (res) => {
+                  if (res.response.byteLength > 10) {
+                    chap_dir.file(filename, res.response, { binary: true });
+                    resolve();
+                  } else reject();
+                },
+                onerror: reject,
+                ontimeout: reject,
+              });
+            }).catch(async () => {
+              if (r < retry) {
+                await new Promise((res) => {
+                  setTimeout(res, wait);
+                });
+                await zero_f(++r);
+              } else {
+                c();
+                m(filename);
+              }
+            });
+          }
         }
 
         function fmtLogs(msg) {

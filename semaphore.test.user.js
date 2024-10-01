@@ -6,7 +6,8 @@
 // @author       mccranky
 // @match        https://cn.bing.com/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=bing.com
-// @grant        none
+// @grant        GM_xmlhttpRequest
+// @connect      bing.com
 // ==/UserScript==
 
 "use strict";
@@ -33,6 +34,7 @@ class Semaphore {
   }
 }
 
+const NUMBER = 10;
 const c = (() => {
   let count = 0;
   return (f) => {
@@ -42,7 +44,7 @@ const c = (() => {
 })();
 
 (async () => {
-  const queries = [...Array(5000)].map((_, i) => i);
+  const queries = [...Array(NUMBER)].map((_, i) => i);
 
   /**
    * (Abandoned) Method 1:
@@ -51,7 +53,7 @@ const c = (() => {
   // await Promise.all(queries.map((cur) => bingSearch(cur)));
 
   // Method 2:
-  await limitParP(queries, bingSearch, 30);
+  await limitParP(queries, GM_bingSearch, 30);
   console.log(c(true) + " queries missed");
 })();
 
@@ -74,4 +76,40 @@ async function bingSearch(query) {
     .catch(() => {
       c();
     });
+}
+
+async function GM_bingSearch(query, r = 0) {
+  await new Promise((resolve, reject) => {
+    GM_xmlhttpRequest({
+      url: `https://cn.bing.com/search?q=${query}`,
+      method: "GET",
+      timeout: 10_000,
+      onload: (res) => {
+        const title = new DOMParser().parseFromString(
+          res.response,
+          "text/html",
+        ).title;
+        console.log(title);
+        resolve();
+      },
+      onerror: () => {
+        reject(new Error("request error"));
+      },
+      ontimeout: () => {
+        reject(new Error("request timeout"));
+      },
+    });
+  }).catch(async (e) => {
+    if (r < 3) {
+      await new Promise((res) => {
+        setTimeout(res, 5_000);
+        console.error(`${query}: ${e.message}`);
+        console.log(`${query}: retrying ${r + 1} time(s)...`);
+      });
+      await GM_bingSearch(query, ++r);
+    } else {
+      c();
+      console.log(`${query}: failed`);
+    }
+  });
 }
