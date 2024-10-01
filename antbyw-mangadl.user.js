@@ -474,6 +474,7 @@ window.addEventListener("load", async () => {
           $(document).on("keydown", ({ key }) => {
             key === "Escape" && hideCursor();
           });
+          $("#mangadl-all").on("click", hideCursor);
           $(document).on("click", ".muludiv", function (e) {
             if (f) {
               e.preventDefault();
