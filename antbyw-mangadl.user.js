@@ -56,7 +56,6 @@ window.addEventListener("load", async () => {
             if (!$("#mangadl-retry").attr("class").includes("none")) {
               $("#mangadl-retry").addClass("none");
             }
-            this.dling = false;
             this.entry_chap = 0;
             this.end_chap = 0;
             this.max_chap_par = 0;
@@ -147,7 +146,7 @@ window.addEventListener("load", async () => {
               justify-content: center;
               text-overflow: ellipsis;
               white-space: nowrap;
-            } 
+            }
             #sidebar-open-btn.hidden {
               display: none;
             }
@@ -282,9 +281,11 @@ window.addEventListener("load", async () => {
           end.join("\n");
           const menu_html = `
             <div id="injected">
-              <div>
+              <div class="range-container">
                 <span>開始：</span>
                 <select name="entry" class="uk-select">${entry}</select>
+              </div>
+              <div class="range-container">
                 <span>結束：</span>
                 <select name="end" class="uk-select">${end}</select>
               </div>
@@ -321,10 +322,10 @@ window.addEventListener("load", async () => {
                 </a>
               </div>
             </div>
-      `;
+          `;
           $("div#uk-sidebar .uk-container").append(menu_html);
           $("#mangadl-all").on("click", dlAll);
-          $("#mangadl-retry").on("click", dl);
+          $("#mangadl-retry").on("click", dlRetry);
 
           // Adding css styles
           (() => {
@@ -353,6 +354,7 @@ window.addEventListener("load", async () => {
                 padding: 2%;
                 box-sizing: border-box;
               }
+              .range-container,
               .tooltip-container {
                   position: relative;
                   display: inline-block;
@@ -386,14 +388,14 @@ window.addEventListener("load", async () => {
                   right: 0%;
                   top: 100%;
                   white-space: normal;
-              } 
+              }
               .tooltip-button:hover + .tooltip-text {
                   visibility: visible;
                   opacity: 1;
               }
               .tooltip-text p {
                   margin: 0 0 10px;
-              } 
+              }
               .tooltip-text p:last-child {
                   margin-bottom: 0;
               }
@@ -425,7 +427,7 @@ window.addEventListener("load", async () => {
               border-radius: 50%;
               background-color: blue;
               opacity: 0.5;
-            } 
+            }
             #vertical-line,
             #horizontal-line {
               background-color: blue;
@@ -450,7 +452,7 @@ window.addEventListener("load", async () => {
               background: linear-gradient(to right, blue 50%, transparent 50%);
               background-size: 20px 100%;
               animation: moveRight 1s linear infinite;
-            } 
+            }
             @keyframes moveDown {
               0% {
                 background-position: 0 0;
@@ -458,7 +460,7 @@ window.addEventListener("load", async () => {
               100% {
                 background-position: 0 20px;
               }
-            } 
+            }
             @keyframes moveRight {
               0% {
                 background-position: 0 0;
@@ -524,8 +526,8 @@ window.addEventListener("load", async () => {
           }
         }
 
-        function dlAll() {
-          if ($("#mangadl-all").attr("dling")) {
+        async function dlAll() {
+          if ($("#mangadl-all").attr("dling") || mangadl.dling) {
             $("#mangadl-all").text("下載中稍等..");
             return;
           } else {
@@ -557,11 +559,44 @@ window.addEventListener("load", async () => {
           mangadl.max_chap_par = Number($("#injected [name='chap-par']").val());
           mangadl.max_img_par = Number($("#injected [name='img-par']").val());
 
-          dl();
+          await dl();
         }
 
-        function dl() {
-          limitParDl(mangadl.chap_dllist, getImgList, [], mangadl.max_chap_par)
+        async function dlRetry() {
+          if ($("#mangadl-retry").attr("dling") || mangadl.dling) {
+            $("#mangadl-retry").text("下載中稍等..");
+            return;
+          } else {
+            mangadl.dling = true;
+            $("#mangadl-retry").attr("dling", mangadl.dling).text("下載中");
+          }
+          await dl();
+        }
+
+        async function dl() {
+          const toplv_dir = mangadl.zip.folder(mangadl.manga_name);
+          const c_chap = createCounter();
+          const m_chap = missingContent();
+          await limitParDl(
+            mangadl.chap_dllist,
+            getImgList,
+            [toplv_dir, c_chap, m_chap],
+            mangadl.max_chap_par,
+          )
+            .then(() => {
+              try {
+                if (!c_chap(true))
+                  console.log(`${mangadl.manga_name}: all clear!`);
+                else
+                  throw new Error(
+                    `${mangadl.manga_name}缺失章節：${c_chap(true)}/${mangadl.chap_dllist.length}`,
+                  );
+              } catch (e) {
+                console.error(e.message);
+                const filename = "不完整下載.txt";
+                toplv_dir.file(filename, fmtLogs(`${e.message}\n${m_chap()}`));
+              }
+            })
             .then(() => {
               mangadl.zip
                 .generateAsync({
@@ -571,11 +606,14 @@ window.addEventListener("load", async () => {
                 .then((zipFile) => {
                   saveAs(zipFile, `${mangadl.manga_name}.zip`);
                   $("#mangadl-all").removeAttr("dling").text("打包下載");
+                  $("#mangadl-retry").removeAttr("dling").text("重新下載");
+                  $("#mangadl-seperate").removeAttr("dling").text("分批下載");
                   $("#mangadl-retry").removeClass("none");
                 });
             })
             .finally(() => {
               $(".muludiv").css("background-color", "");
+              mangadl.dling = false;
             });
         }
 
@@ -593,11 +631,17 @@ window.addEventListener("load", async () => {
           }
 
           release() {
-            this.counter++;
             if (this.waitlist.length > 0) {
               this.counter--;
               this.waitlist.shift()();
             }
+
+            /*
+             * Placed at the end of the method
+             * Prevents new acquisitions from bypassing the waitlist
+             */
+
+            this.counter++;
           }
         }
 
@@ -611,13 +655,11 @@ window.addEventListener("load", async () => {
           );
         }
 
-        async function getImgList(chap) {
-          const toplv_dirname = mangadl.manga_name;
-          const toplv_dir = mangadl.zip.folder(toplv_dirname);
+        async function getImgList(chap, toplv_dir, c_chap, m_chap) {
           const chap_zip = new JSZip();
           const chap_dirname = chap.number;
           const chap_dir = chap_zip.folder(chap_dirname);
-          await fetchT(chap.url, { method: "GET" }, 10_000)
+          await fetchT(chap.url, { method: "GET" }, 30_000)
             .then((res) => {
               if (!res.ok)
                 throw new Error(`${chap_dirname}: chapter request failed...`);
@@ -651,36 +693,36 @@ window.addEventListener("load", async () => {
               } else {
                 const imgs = $nodes.find(".uk-zjimg img").toArray();
                 const img_num = imgs.length;
-                const m = (() => {
-                  let missing_pgs = "";
-                  return (str) => {
-                    missing_pgs = [missing_pgs, str].join("\n");
-                    return missing_pgs.trim();
-                  };
-                })();
-                const c = (() => {
-                  let count = 0;
-                  return (flag) => {
-                    !flag && ++count;
-                    return count;
-                  };
-                })();
+                const m = missingContent();
+                const c = new Proxy(
+                  { SUM: img_num, sc: 0, fc: 0 },
+                  {
+                    get(tar, key) {
+                      return Reflect.get(...arguments);
+                    },
+                    set(tar, key, val) {
+                      return Reflect.set(...arguments);
+                    },
+                  },
+                );
                 await limitParDl(
                   imgs,
                   dlImg,
-                  [chap_dir, c, m],
+                  [chap_dirname, chap_dir, c, m],
                   mangadl.max_img_par,
                 );
                 try {
-                  if (!c(true)) console.log(`${chap_dirname}: all clear!`);
+                  if (!c.fc) console.log(`${chap_dirname}: all clear!`);
                   else
                     throw new Error(
-                      `${chap_dirname}缺失頁：${c(true)}/${img_num}`,
+                      `${chap_dirname}缺失頁：${c.fc}/${img_num}`,
                     );
                 } catch (e) {
                   console.error(e.message);
                   const filename = "不完整下載.txt";
                   chap_dir.file(filename, fmtLogs(`${e.message}\n${m()}`));
+                  c_chap();
+                  m_chap(chap_dirname);
                 }
                 await zipChap();
                 return;
@@ -711,11 +753,11 @@ window.addEventListener("load", async () => {
           }
         }
 
-        async function dlImg(img, chap_dir, c, m) {
+        async function dlImg(img, chap_dirname, chap_dir, c, m) {
           const attr = location.hostname.includes("ant") ? "data-src" : "src";
           const url = $(img).attr(attr);
           const filename = url.split("/").reverse()[0];
-          const timeout = 10_000;
+          const timeout = 60_000;
           const wait = 5_000;
           const retry = 3;
           const hide_retry_logs = true; // Pending feature
@@ -729,20 +771,26 @@ window.addEventListener("load", async () => {
                 else return res.arrayBuffer();
               })
               .then((res) => {
-                if (res.byteLength > 10)
+                if (res.byteLength > 10) {
                   chap_dir.file(filename, res, { binary: true });
-                else throw new Error();
+                  c.sc++;
+                } else throw new Error();
               })
               .catch(async () => {
                 if (r < retry) {
                   await new Promise((res) => {
                     setTimeout(res, wait);
                     hide_retry_logs &&
-                      console.log(`${filename}重試次數: ${r + 1}/${retry}次`);
+                      console.log(
+                        `${chap_dirname}的${filename}重試次數: ${r + 1}/${retry}次`,
+                      );
                   });
                   await ant_f(++r);
                 } else {
-                  c();
+                  console.log(
+                    `${chap_dirname}的${filename}: Failed to download...`,
+                  );
+                  c.fc++;
                   m(filename);
                 }
               });
@@ -758,6 +806,7 @@ window.addEventListener("load", async () => {
                 onload: (res) => {
                   if (res.response.byteLength > 10) {
                     chap_dir.file(filename, res.response, { binary: true });
+                    c.sc++;
                     resolve();
                   } else reject();
                 },
@@ -771,11 +820,27 @@ window.addEventListener("load", async () => {
                 });
                 await zero_f(++r);
               } else {
-                c();
+                c.fc++;
                 m(filename);
               }
             });
           }
+        }
+
+        function createCounter() {
+          let count = 0;
+          return (flag) => {
+            !flag && ++count;
+            return count;
+          };
+        }
+
+        function missingContent() {
+          let missing = "";
+          return (str) => {
+            missing = [missing, str].join("\n");
+            return missing.trim();
+          };
         }
 
         function fmtLogs(msg) {
