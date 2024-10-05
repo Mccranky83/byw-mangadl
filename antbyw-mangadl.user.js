@@ -56,6 +56,8 @@ window.addEventListener("load", async () => {
             if (!$("#mangadl-retry").attr("class").includes("none")) {
               $("#mangadl-retry").addClass("none");
             }
+            $("#dl-bar").show();
+            $("#dl-progress").show();
             this.entry_chap = 0;
             this.end_chap = 0;
             this.max_chap_par = 0;
@@ -114,6 +116,7 @@ window.addEventListener("load", async () => {
         createSidebar();
         createMenu();
         manualSelect();
+        initPB();
 
         function createSidebar() {
           const html = `
@@ -526,6 +529,52 @@ window.addEventListener("load", async () => {
           }
         }
 
+        function initPB() {
+          const css = `
+            #dl-bar {
+              border: 1px solid black;
+              height: 20px;
+              width: 400px;
+              display: none;
+              position: relative;
+              background-color: #f3f3f3;
+              overflow: hidden;
+            }
+            #dl-progress-failed {
+              height: 100%;
+              width: 0%;
+              background-color: red;
+              position: absolute;
+              transition: width 0.5s ease;
+            }
+            #dl-progress {
+              height: 100%;
+              width: 0%;
+              background-color: green;
+              position: absolute;
+              transition: width 0.5s ease;
+            }
+            #dl-info {
+              position: absolute;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+              font-size: 12px;
+              z-index: 999999;
+              color: black;
+            }
+          `;
+          $("<div>", { id: "dl-bar" })
+            .html(
+              `</div><div id="dl-progress"></div><span id="dl-info"></span><div id="dl-progress-failed">`,
+            )
+            .appendTo(".uk-width-expand .uk-margin-left");
+          $("<span>", { id: "dl-percentage" })
+            .text(`0/${mangadl.chap_dllist.length}`)
+            .insertAfter("#dl-bar");
+          $("<style>", { type: "text/css" }).html(css).appendTo(document.head);
+        }
+
         async function dlAll() {
           if ($("#mangadl-all").attr("dling") || mangadl.dling) {
             $("#mangadl-all").text("下載中稍等..");
@@ -577,10 +626,53 @@ window.addEventListener("load", async () => {
           const toplv_dir = mangadl.zip.folder(mangadl.manga_name);
           const c_chap = createCounter();
           const m_chap = missingContent();
+          const h = {
+            get(tar, key) {
+              const val = Reflect.get(tar, key);
+              if (typeof val === "object") return new Proxy(val, h);
+              return val;
+            },
+            set(tar, key, val) {
+              tar[key] = val;
+              if (key === "success" || key === "failed" || key === "net") {
+                const parent = tar.name;
+                if (parent === "page") {
+                  const percentage =
+                    ((tar.success + tar.failed) / tar.net) * 100;
+                  const f_percentage = (tar.failed / tar.net) * 100;
+                  $("#dl-progress").css("width", `${percentage}%`);
+                  $("#dl-progress-failed").css("width", `${f_percentage}%`);
+                  $("#dl-info").text(`${tar.success + tar.failed}/${tar.net}`);
+                } else if (parent === "chap") {
+                  $("#dl-percentage").text(
+                    `${tar.success + tar.failed}/${tar.net}`,
+                  );
+                }
+              }
+              return true;
+            },
+          };
+          const tr = new Proxy(
+            {
+              page: {
+                name: "page",
+                net: 0,
+                success: 0,
+                failed: 0,
+              },
+              chap: {
+                name: "chap",
+                net: mangadl.chap_dllist.length,
+                success: 0,
+                failed: 0,
+              },
+            },
+            h,
+          );
           await limitParDl(
             mangadl.chap_dllist,
             getImgList,
-            [toplv_dir, c_chap, m_chap],
+            [toplv_dir, c_chap, m_chap, tr],
             mangadl.max_chap_par,
           )
             .then(() => {
@@ -613,6 +705,9 @@ window.addEventListener("load", async () => {
             })
             .finally(() => {
               $(".muludiv").css("background-color", "");
+              $("#dl-bar").hide();
+              $("#dl-progress").hide();
+              $("#dl-percentage").text("");
               mangadl.dling = false;
             });
         }
@@ -655,7 +750,7 @@ window.addEventListener("load", async () => {
           );
         }
 
-        async function getImgList(chap, toplv_dir, c_chap, m_chap) {
+        async function getImgList(chap, toplv_dir, c_chap, m_chap, tr) {
           const chap_zip = new JSZip();
           const chap_dirname = chap.number;
           const chap_dir = chap_zip.folder(chap_dirname);
@@ -683,19 +778,22 @@ window.addEventListener("load", async () => {
                   filename,
                   "權限不足，請登錄賬戶或使用VIP帳戶！\n",
                 );
+                tr.page.failed++;
                 genMsgFile(filename);
                 await zipChap();
               } else if (!$nodes.find(".uk-zjimg img").length) {
                 const filename = "VIP專屬.txt";
                 chap_dir.file(filename, "請使用VIP帳戶下載！\n");
+                tr.page.failed++;
                 genMsgFile(filename);
                 await zipChap();
               } else {
                 const imgs = $nodes.find(".uk-zjimg img").toArray();
                 const img_num = imgs.length;
+                tr.page.net += img_num;
                 const m = missingContent();
                 const c = new Proxy(
-                  { SUM: img_num, sc: 0, fc: 0 },
+                  { sc: 0, fc: 0 },
                   {
                     get(tar, key) {
                       return Reflect.get(...arguments);
@@ -708,12 +806,14 @@ window.addEventListener("load", async () => {
                 await limitParDl(
                   imgs,
                   dlImg,
-                  [chap_dirname, chap_dir, c, m],
+                  [chap_dirname, chap_dir, c, m, tr],
                   mangadl.max_img_par,
                 );
                 try {
-                  if (!c.fc) console.log(`${chap_dirname}: all clear!`);
-                  else
+                  if (!c.fc) {
+                    tr.chap.success++;
+                    console.log(`${chap_dirname}: all clear!`);
+                  } else
                     throw new Error(
                       `${chap_dirname}缺失頁：${c.fc}/${img_num}`,
                     );
@@ -721,6 +821,7 @@ window.addEventListener("load", async () => {
                   console.error(e.message);
                   const filename = "不完整下載.txt";
                   chap_dir.file(filename, fmtLogs(`${e.message}\n${m()}`));
+                  tr.chap.failed++;
                   c_chap();
                   m_chap(chap_dirname);
                 }
@@ -753,7 +854,7 @@ window.addEventListener("load", async () => {
           }
         }
 
-        async function dlImg(img, chap_dirname, chap_dir, c, m) {
+        async function dlImg(img, chap_dirname, chap_dir, c, m, tr) {
           const attr = location.hostname.includes("ant") ? "data-src" : "src";
           const url = $(img).attr(attr);
           const filename = url.split("/").reverse()[0];
@@ -774,6 +875,7 @@ window.addEventListener("load", async () => {
                 if (res.byteLength > 10) {
                   chap_dir.file(filename, res, { binary: true });
                   c.sc++;
+                  tr.page.success++;
                 } else throw new Error();
               })
               .catch(async () => {
@@ -791,6 +893,7 @@ window.addEventListener("load", async () => {
                     `${chap_dirname}的${filename}: Failed to download...`,
                   );
                   c.fc++;
+                  tr.page.failed++;
                   m(filename);
                 }
               });
@@ -807,6 +910,7 @@ window.addEventListener("load", async () => {
                   if (res.response.byteLength > 10) {
                     chap_dir.file(filename, res.response, { binary: true });
                     c.sc++;
+                    tr.page.success++;
                     resolve();
                   } else reject();
                 },
@@ -821,6 +925,7 @@ window.addEventListener("load", async () => {
                 await zero_f(++r);
               } else {
                 c.fc++;
+                tr.page.failed++;
                 m(filename);
               }
             });
