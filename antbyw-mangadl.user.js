@@ -58,6 +58,9 @@ window.addEventListener("load", async () => {
             }
             $("#dl-bar").show();
             $("#dl-progress").show();
+            $("<span>", { id: "dl-percentage" })
+              .text(`0/${mangadl.chap_dllist.length}`)
+              .insertAfter("#dl-bar");
             this.entry_chap = 0;
             this.end_chap = 0;
             this.max_chap_par = 0;
@@ -569,9 +572,6 @@ window.addEventListener("load", async () => {
               `</div><div id="dl-progress"></div><span id="dl-info"></span><div id="dl-progress-failed">`,
             )
             .appendTo(".uk-width-expand .uk-margin-left");
-          $("<span>", { id: "dl-percentage" })
-            .text(`0/${mangadl.chap_dllist.length}`)
-            .insertAfter("#dl-bar");
           $("<style>", { type: "text/css" }).html(css).appendTo(document.head);
         }
 
@@ -708,6 +708,7 @@ window.addEventListener("load", async () => {
               $("#dl-bar").hide();
               $("#dl-progress").hide();
               $("#dl-percentage").text("");
+              $("#dl-percentage").remove();
               mangadl.dling = false;
             });
         }
