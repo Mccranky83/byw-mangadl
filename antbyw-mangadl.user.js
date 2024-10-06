@@ -272,15 +272,15 @@ window.addEventListener("load", async () => {
               </option>`);
           });
           const MAX_CHAP_PAR = 5;
-          const MAX_IMG_PAR_MULTI = 4;
+          const MAX_IMG_PAR_MULTI = 20;
           const chap_par = [...Array(MAX_CHAP_PAR)].map(
             (_, i) => `
               <option value=${i + 1} ${i === MAX_CHAP_PAR - 1 ? "selected" : ""}>${i + 1}</option>
             `,
           );
-          const img_par = [...Array(MAX_IMG_PAR_MULTI)].map(
+          const img_par = [...Array(MAX_CHAP_PAR)].map(
             (_, i) => `
-              <option value=${(i + 1) * 5} ${i === MAX_IMG_PAR_MULTI - 1 ? "selected" : ""}>${(i + 1) * 5}</option>
+              <option value=${i + 1} ${i === MAX_CHAP_PAR - 1 ? "selected" : ""}>${(i + 1) * MAX_IMG_PAR_MULTI}</option>
             `,
           );
           entry.join("\n");
@@ -325,6 +325,9 @@ window.addEventListener("load", async () => {
                 </a>
                 <a href="javascript:;" class="uk-button uk-button-primary" id="manual-select">
                   <span>手動選擇</span>
+                </a>
+                <a href="javascript:;" class="uk-button uk-button-primary" id="manual-pause">
+                  <span>手動暫停</span>
                 </a>
               </div>
             </div>
@@ -575,6 +578,43 @@ window.addEventListener("load", async () => {
           $("<style>", { type: "text/css" }).html(css).appendTo(document.head);
         }
 
+        class Semaphore {
+          constructor(max_par) {
+            this.counter = max_par;
+            this.waitlist = [];
+            this.paused = false;
+          }
+          async acquire() {
+            await this.checkStat();
+            if (this.counter > 0) this.counter--;
+            else
+              await new Promise((res) => {
+                this.waitlist.push(res);
+              });
+          }
+          async release() {
+            await this.checkStat();
+            if (this.waitlist.length > 0) {
+              this.counter--;
+              this.waitlist.shift()();
+            }
+            /*
+             * Placed at the end of the method
+             * Prevents new acquisitions from bypassing the waitlist
+             */
+            this.counter++;
+          }
+          async checkStat() {
+            while (this.paused)
+              await new Promise((res) => {
+                setTimeout(res, 100);
+              });
+          }
+          toggle() {
+            this.paused = !this.paused;
+          }
+        }
+
         async function dlAll() {
           if ($("#mangadl-all").attr("dling") || mangadl.dling) {
             $("#mangadl-all").text("下載中稍等..");
@@ -624,6 +664,16 @@ window.addEventListener("load", async () => {
 
         async function dl() {
           const toplv_dir = mangadl.zip.folder(mangadl.manga_name);
+          /**
+           * All dlImg instances share the same semaphore
+           * s_img is passed as an option to limitParDl
+           */
+          const s_chap = new Semaphore(mangadl.max_chap_par);
+          const s_img = new Semaphore(mangadl.max_img_par);
+          $("#manual-pause").on("click", () => {
+            s_img.toggle();
+            $("#manual-pause").text(s_img.paused ? "繼續下載" : "暫停下載");
+          });
           const c_chap = createCounter();
           const m_chap = missingContent();
           const h = {
@@ -672,8 +722,8 @@ window.addEventListener("load", async () => {
           await limitParDl(
             mangadl.chap_dllist,
             getImgList,
-            [toplv_dir, c_chap, m_chap, tr],
-            mangadl.max_chap_par,
+            [toplv_dir, c_chap, m_chap, tr, s_img],
+            s_chap,
           )
             .then(() => {
               try {
@@ -709,49 +759,12 @@ window.addEventListener("load", async () => {
               $("#dl-progress").hide();
               $("#dl-percentage").text("");
               $("#dl-percentage").remove();
+              $("#manual-pause").text("手動暫停");
               mangadl.dling = false;
             });
         }
 
-        class Semaphore {
-          constructor(max_par) {
-            this.counter = max_par;
-            this.waitlist = [];
-          }
-          async acquire() {
-            if (this.counter > 0) {
-              this.counter--;
-              return;
-            }
-            await new Promise((res) => this.waitlist.push(res));
-          }
-
-          release() {
-            if (this.waitlist.length > 0) {
-              this.counter--;
-              this.waitlist.shift()();
-            }
-
-            /*
-             * Placed at the end of the method
-             * Prevents new acquisitions from bypassing the waitlist
-             */
-
-            this.counter++;
-          }
-        }
-
-        async function limitParDl(items, fn, args, max_par) {
-          const s = new Semaphore(max_par);
-          await Promise.all(
-            items.map(async (cur) => {
-              await s.acquire();
-              await fn(cur, ...args).finally(s.release.bind(s));
-            }),
-          );
-        }
-
-        async function getImgList(chap, toplv_dir, c_chap, m_chap, tr) {
+        async function getImgList(chap, toplv_dir, c_chap, m_chap, tr, s) {
           const chap_zip = new JSZip();
           const chap_dirname = chap.number;
           const chap_dir = chap_zip.folder(chap_dirname);
@@ -808,7 +821,7 @@ window.addEventListener("load", async () => {
                   imgs,
                   dlImg,
                   [chap_dirname, chap_dir, c, m, tr],
-                  mangadl.max_img_par,
+                  s,
                 );
                 try {
                   if (!c.fc) {
@@ -931,6 +944,15 @@ window.addEventListener("load", async () => {
               }
             });
           }
+        }
+
+        async function limitParDl(items, fn, args, s) {
+          await Promise.all(
+            items.map(async (cur) => {
+              await s.acquire();
+              await fn(cur, ...args).finally(s.release.bind(s));
+            }),
+          );
         }
 
         function createCounter() {
