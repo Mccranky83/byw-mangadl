@@ -125,6 +125,7 @@ window.addEventListener("load", async () => {
           const html = `
             <button id="sidebar-open-btn">菜單</button>
             <div id="uk-sidebar">
+              <div class="abort-dialog">Click <a href="javascript:;">here</a> to force save downloaded images&period;</div>
               <div class="titlebar">
                 <button id="sidebar-close-btn">&times;</button>
                 <h2>菜單</h2>
@@ -174,9 +175,31 @@ window.addEventListener("load", async () => {
               justify-content: center;
               align-items: center;
             }
+            .abort-dialog a {
+              color: #cc0000;
+              cursor: pointer;
+            }
+            #uk-sidebar .abort-dialog {
+              width: 100%;
+              background: rgba(0, 0, 0, 0.75);
+              color: white;
+              padding: 10px;
+              box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+              text-align: center;
+              position: absolute;
+              top: 0;
+              left: 0;
+              border: 1px solid black;
+              opacity: 0;
+              transition: opacity 0.5s ease, bottom 0.5s ease;
+            }
+            #uk-sidebar:hover .abort-dialog {
+              opacity: 1;
+            }
             #uk-sidebar .titlebar {
               font-size: 25px;
               margin-bottom: auto;
+              margin-top: 50px;
             }
             #uk-sidebar .uk-container {
               margin-top: 10%;
@@ -187,7 +210,7 @@ window.addEventListener("load", async () => {
             }
             #sidebar-close-btn {
               position: absolute;
-              top: 10px;
+              top: 40px;
               right: 20px;
               font-size: 30px;
               background: none;
@@ -583,6 +606,7 @@ window.addEventListener("load", async () => {
             this.counter = max_par;
             this.waitlist = [];
             this.paused = false;
+            this.terminated = false;
           }
           async acquire() {
             await this.checkStat();
@@ -610,8 +634,16 @@ window.addEventListener("load", async () => {
                 setTimeout(res, 100);
               });
           }
-          toggle() {
+          togglePause() {
             this.paused = !this.paused;
+          }
+          terminate() {
+            this.terminated = true;
+            // Waitlist can be purged, but all requests sent must resolve
+            if (this.paused) this.togglePause();
+            this.waitlist.forEach((cur) => {
+              cur();
+            });
           }
         }
 
@@ -671,10 +703,15 @@ window.addEventListener("load", async () => {
           const s_chap = new Semaphore(mangadl.max_chap_par);
           const s_img = new Semaphore(mangadl.max_img_par);
           $("#manual-pause").on("click", () => {
-            s_img.toggle();
+            s_img.togglePause();
             $("#manual-pause").text(s_img.paused ? "繼續下載" : "暫停下載");
           });
-          const c_chap = createCounter();
+          $(".abort-dialog").click(() => {
+            s_chap.terminate();
+            s_img.terminate();
+          });
+          const sc_chap = createCounter();
+          const fc_chap = createCounter();
           const m_chap = missingContent();
           const h = {
             get(tar, key) {
@@ -722,17 +759,20 @@ window.addEventListener("load", async () => {
           await limitParDl(
             mangadl.chap_dllist,
             getImgList,
-            [toplv_dir, c_chap, m_chap, tr, s_img],
+            [toplv_dir, sc_chap, fc_chap, m_chap, tr, s_img],
             s_chap,
           )
             .then(() => {
               try {
-                if (!c_chap(true))
+                if (!fc_chap(true))
                   console.log(`${mangadl.manga_name}: all clear!`);
-                else
+                else {
+                  if (s_chap.terminated)
+                    console.error(`${mangadl.manga_name}: terminated!`);
                   throw new Error(
-                    `${mangadl.manga_name}缺失章節：${c_chap(true)}/${mangadl.chap_dllist.length}`,
+                    `缺失章節：${fc_chap(true)}/${sc_chap(true)} (Total: ${tr.chap.net})`,
                   );
+                }
               } catch (e) {
                 console.error(e.message);
                 const filename = "不完整下載.txt";
@@ -764,7 +804,15 @@ window.addEventListener("load", async () => {
             });
         }
 
-        async function getImgList(chap, toplv_dir, c_chap, m_chap, tr, s) {
+        async function getImgList(
+          chap,
+          toplv_dir,
+          sc_chap,
+          fc_chap,
+          m_chap,
+          tr,
+          s,
+        ) {
           const chap_zip = new JSZip();
           const chap_dirname = chap.number;
           const chap_dir = chap_zip.folder(chap_dirname);
@@ -824,19 +872,21 @@ window.addEventListener("load", async () => {
                   s,
                 );
                 try {
-                  if (!c.fc) {
+                  if (!c.fc && c.sc === imgs.length) {
                     tr.chap.success++;
+                    sc_chap();
                     console.log(`${chap_dirname}: all clear!`);
                   } else
                     throw new Error(
-                      `${chap_dirname}缺失頁：${c.fc}/${img_num}`,
+                      `${chap_dirname}缺失頁：${c.fc || imgs.length - c.sc}/${img_num}`,
                     );
                 } catch (e) {
                   console.error(e.message);
                   const filename = "不完整下載.txt";
                   chap_dir.file(filename, fmtLogs(`${e.message}\n${m()}`));
                   tr.chap.failed++;
-                  c_chap();
+                  sc_chap();
+                  fc_chap();
                   m_chap(chap_dirname);
                 }
                 await zipChap();
@@ -950,6 +1000,7 @@ window.addEventListener("load", async () => {
           await Promise.all(
             items.map(async (cur) => {
               await s.acquire();
+              if (s.terminated) return;
               await fn(cur, ...args).finally(s.release.bind(s));
             }),
           );
