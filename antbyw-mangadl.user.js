@@ -49,7 +49,8 @@ window.addEventListener("load", async () => {
             this.max_chap_par = 0;
             this.max_img_par = 0;
             this.dling = false;
-            this.zip = {};
+            this.zip = [];
+            this.storing = false;
 
             // Logging
             this.f = false;
@@ -65,7 +66,7 @@ window.addEventListener("load", async () => {
             this.max_chap_par = 0;
             this.max_img_par = 0;
             this.chap_dllist = [];
-            this.zip = new JSZip();
+            this.zip = [];
             console.clear();
           }
           getChapterInfo() {
@@ -341,9 +342,6 @@ window.addEventListener("load", async () => {
                 </a>
                 <a href="javascript:;" class="uk-button uk-button-primary none" style="background-color: black;" id="mangadl-retry">
                   <span>重新下載</span>
-                </a>
-                <a href="javascript:;" class="uk-button uk-button-primary" id="mangadl-seperate">
-                  <span>分批下載</span>
                 </a>
                 <a href="javascript:;" class="uk-button uk-button-primary" id="manual-pause">
                   <span>手動暫停</span>
@@ -700,10 +698,7 @@ window.addEventListener("load", async () => {
             this.counter++;
           }
           async checkStat() {
-            while (this.paused)
-              await new Promise((res) => {
-                setTimeout(res, 100);
-              });
+            while (this.paused) await timeout(100);
           }
           togglePause() {
             this.paused = !this.paused;
@@ -766,7 +761,6 @@ window.addEventListener("load", async () => {
         }
 
         async function dl() {
-          const toplv_dir = mangadl.zip.folder(mangadl.manga_name);
           /**
            * All dlImg instances share the same semaphore
            * s_img is passed as an option to limitParDl
@@ -836,10 +830,22 @@ window.addEventListener("load", async () => {
             h,
           );
           $("#dl-percentage").text(`0/${mangadl.net_chap}`);
+          const id = setInterval(async () => {
+            if (mangadl.zip.length > 1) {
+              const zipFile = mangadl.zip.shift();
+              saveAs(
+                await zipFile.generateAsync({
+                  type: "blob",
+                  compression: "STORE",
+                }),
+                `${mangadl.manga_name}.zip`,
+              );
+            }
+          }, 1_000);
           await limitParDl(
             mangadl.chap_dllist,
             getImgList,
-            [toplv_dir, sc_chap, fc_chap, m_chap, tr, s_img],
+            [sc_chap, fc_chap, m_chap, tr, s_img],
             s_chap,
           )
             .then(() => {
@@ -856,24 +862,28 @@ window.addEventListener("load", async () => {
               } catch (e) {
                 console.error(e.message);
                 const filename = "不完整下載.txt";
-                toplv_dir.file(filename, fmtLogs(`${e.message}\n${m_chap()}`));
+                mangadl.zip[mangadl.zip.length - 1].file(
+                  filename,
+                  fmtLogs(`${e.message}\n${m_chap()}`),
+                );
               }
             })
-            .then(() => {
-              mangadl.zip
-                .generateAsync({
-                  type: "blob",
-                  compression: "STORE",
-                })
-                .then((zipFile) => {
+            .then(async () => {
+              clearInterval(id);
+              await Promise.all(
+                mangadl.zip.map(async (cur) => {
+                  const zipFile = await cur.generateAsync({
+                    type: "blob",
+                    compression: "STORE",
+                  });
                   saveAs(zipFile, `${mangadl.manga_name}.zip`);
-                  $("#mangadl-all").removeAttr("dling").text("打包下載");
-                  $("#mangadl-retry").removeAttr("dling").text("重新下載");
-                  $("#mangadl-seperate").removeAttr("dling").text("分批下載");
-                  $("#mangadl-retry").removeClass("none");
-                });
+                }),
+              );
             })
             .finally(() => {
+              $("#mangadl-all").removeAttr("dling").text("打包下載");
+              $("#mangadl-retry").removeAttr("dling").text("重新下載");
+              $("#mangadl-retry").removeClass("none");
               $(".muludiv").css("background-color", "");
               // Reset progress bar
               $("#dl-bar").hide();
@@ -892,15 +902,7 @@ window.addEventListener("load", async () => {
             });
         }
 
-        async function getImgList(
-          chap,
-          toplv_dir,
-          sc_chap,
-          fc_chap,
-          m_chap,
-          tr,
-          s,
-        ) {
+        async function getImgList(chap, sc_chap, fc_chap, m_chap, tr, s) {
           const chap_zip = new JSZip();
           const chap_dirname = chap.number;
           const chap_dir = chap_zip.folder(chap_dirname);
@@ -995,6 +997,28 @@ window.addEventListener("load", async () => {
                 level: 6,
               },
             });
+            let toplv_dir = {};
+            const payload = 2 * Math.pow(1024, 3);
+            const createZip = () => {
+              const zip = new JSZip();
+              mangadl.zip.push(zip);
+              return zip;
+            };
+            while (mangadl.storing) {
+              await timeout(1_000);
+            }
+            mangadl.storing = true;
+            if (mangadl.zip.length > 1) {
+              const size = (
+                await mangadl.zip[mangadl.zip.length - 1].generateAsync({
+                  type: "uint8array",
+                  compression: "STORE",
+                })
+              ).length;
+              if (size > payload) toplv_dir = createZip();
+            } else if (!mangadl.zip.length) toplv_dir = createZip();
+            else toplv_dir = mangadl.zip[mangadl.zip.length - 1];
+            mangadl.storing = false;
             toplv_dir.file(`${chap_dirname}.zip`, chap_blob, {
               binary: true,
             });
@@ -1002,9 +1026,7 @@ window.addEventListener("load", async () => {
 
           async function updateDledChap() {
             while (mangadl.f) {
-              await new Promise((res) => {
-                setTimeout(res, 1_000);
-              });
+              await timeout(1_000);
             }
             mangadl.f = true;
             mangadl.net_chap--;
@@ -1029,8 +1051,8 @@ window.addEventListener("load", async () => {
           const filename = url.split("/").reverse()[0];
           const timeout = 60_000;
           const wait = 5_000;
-          const retry = 3;
-          const hide_retry_logs = true; // Pending feature
+          const retry = 3; // Pending feature
+          const hide_retry_logs = true;
           if (location.href.includes("ant")) await ant_f();
           else await zero_f();
 
@@ -1135,11 +1157,17 @@ window.addEventListener("load", async () => {
             .sort()
             .reduce((acc, cur, i) => {
               !(i % 5) && acc.push([]);
-              acc[acc.length - 1].push(cur.padStart(10, " "));
+              acc[acc.length - 1].push(cur.padStart(15, " "));
               return acc;
             }, [])
             .map((cur) => cur.join(""));
           return [...gist, ...content].join("\n");
+        }
+
+        async function timeout(ms) {
+          await new Promise((res) => {
+            setTimeout(res, ms);
+          });
         }
 
         function fetchT(url, options, timeout) {
