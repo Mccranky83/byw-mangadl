@@ -50,17 +50,16 @@ window.addEventListener("load", async () => {
             this.max_img_par = 0;
             this.dling = false;
             this.zip = {};
+
+            // Logging
+            this.f = false;
+            this.net_chap = 0;
           }
 
           init() {
             if (!$("#mangadl-retry").attr("class").includes("none")) {
               $("#mangadl-retry").addClass("none");
             }
-            $("#dl-bar").show();
-            $("#dl-progress").show();
-            $("<span>", { id: "dl-percentage" })
-              .text(`0/${mangadl.chap_dllist.length}`)
-              .insertAfter("#dl-bar");
             this.entry_chap = 0;
             this.end_chap = 0;
             this.max_chap_par = 0;
@@ -346,11 +345,11 @@ window.addEventListener("load", async () => {
                 <a href="javascript:;" class="uk-button uk-button-primary" id="mangadl-seperate">
                   <span>分批下載</span>
                 </a>
-                <a href="javascript:;" class="uk-button uk-button-primary" id="manual-select">
-                  <span>手動選擇</span>
-                </a>
                 <a href="javascript:;" class="uk-button uk-button-primary" id="manual-pause">
                   <span>手動暫停</span>
+                </a>
+                <a href="javascript:;" class="uk-button uk-button-primary" id="manual-select">
+                  <span>手動選擇</span>
                 </a>
               </div>
             </div>
@@ -599,6 +598,78 @@ window.addEventListener("load", async () => {
             )
             .appendTo(".uk-width-expand .uk-margin-left");
           $("<style>", { type: "text/css" }).html(css).appendTo(document.head);
+          const dl_percentage = `
+            <div id="dl-percentage-container">
+              <a href="javascript:;" id="dl-percentage" class="animate-click" draggable="false"></a>
+            </div>
+          `;
+          $("body").append(dl_percentage);
+          const chap_css = `
+            #dl-percentage-container {
+              display: none;
+              position: fixed !important;
+              z-index: 999999 !important;
+              right: 0 !important;
+              bottom: 0 !important;
+            }
+            #dl-percentage-container > a {
+              display: flex !important;
+              position: relative !important;
+              min-width: 1vh !important;
+              min-height: 1vh !important;
+              max-width: max-content !important;
+              max-height: max-content !important;
+              align-items: center !important;
+              justify-content: center !important;
+              border: 0.2vh solid black !important;
+              border-radius: 0.4vh !important;
+              padding: 0.6vh !important;
+              margin: 1.2vh !important;
+              margin-left: auto !important;
+              font-weight: bold !important;
+              font-size: 1.9vh !important;
+              text-decoration: none !important;
+              cursor: pointer !important;
+              user-select: none !important;
+              transition:
+                top 0.05s ease-out,
+                right 0.05s ease-out,
+                bottom 0.05s ease-out,
+                left 0.05s ease-out,
+                box-shadow 0.05s ease-out !important;
+              background-color: white;
+              color: black;
+            }
+            #dl-percentage-container > a.disabled {
+              pointer-events: none !important;
+              opacity: 0.5 !important;
+            }
+            #dl-percentage-container > a:hover {
+              filter: brightness(90%);
+            }
+            #dl-percentage-container > a:active {
+              filter: brightness(75%);
+            }
+            #dl-percentage-container > a.animate-click {
+              bottom: 0vh;
+              right: 0vh;
+              box-shadow:
+                black 0.05vh 0.05vh,
+                black 0.1vh 0.1vh,
+                black 0.15vh 0.15vh,
+                black 0.2vh 0.2vh,
+                black 0.25vh 0.25vh,
+                black 0.3vh 0.3vh,
+                black 0.35vh 0.35vh,
+                black 0.4vh 0.4vh;
+            }
+            #dl-percentage-container > a.animate-click:active {
+              bottom: -0.4vh;
+              right: -0.4vh;
+              box-shadow: none;
+            }
+          `;
+          $("<style>", { type: "text/css" }).html(chap_css).insertAfter("head");
         }
 
         class Semaphore {
@@ -702,6 +773,7 @@ window.addEventListener("load", async () => {
            */
           const s_chap = new Semaphore(mangadl.max_chap_par);
           const s_img = new Semaphore(mangadl.max_img_par);
+          mangadl.net_chap = mangadl.chap_dllist.length;
           $("#manual-pause").on("click", () => {
             s_img.togglePause();
             $("#manual-pause").text(s_img.paused ? "繼續下載" : "暫停下載");
@@ -710,6 +782,13 @@ window.addEventListener("load", async () => {
             s_chap.terminate();
             s_img.terminate();
           });
+          $(".animate-click").click(() => {
+            s_chap.terminate();
+            s_img.terminate();
+          });
+          $("#dl-bar").show();
+          $("#dl-progress").show();
+          $("#dl-percentage-container").show();
           const sc_chap = createCounter();
           const fc_chap = createCounter();
           const m_chap = missingContent();
@@ -732,7 +811,7 @@ window.addEventListener("load", async () => {
                   $("#dl-info").text(`${tar.success + tar.failed}/${tar.net}`);
                 } else if (parent === "chap") {
                   $("#dl-percentage").text(
-                    `${tar.success + tar.failed}/${tar.net}`,
+                    `${tar.success + tar.failed}/${mangadl.net_chap}`,
                   );
                 }
               }
@@ -756,6 +835,7 @@ window.addEventListener("load", async () => {
             },
             h,
           );
+          $("#dl-percentage").text(`0/${mangadl.net_chap}`);
           await limitParDl(
             mangadl.chap_dllist,
             getImgList,
@@ -795,11 +875,19 @@ window.addEventListener("load", async () => {
             })
             .finally(() => {
               $(".muludiv").css("background-color", "");
+              // Reset progress bar
               $("#dl-bar").hide();
               $("#dl-progress").hide();
+              $("#dl-progress").css({ width: 0 });
+              $("#dl-progress-failed").css({ width: 0 });
+              $("#dl-info").text("");
+
+              // Reset chap/net ratio display
+              $("#dl-percentage-container").hide();
               $("#dl-percentage").text("");
-              $("#dl-percentage").remove();
+
               $("#manual-pause").text("手動暫停");
+              mangadl.net_chap = 0;
               mangadl.dling = false;
             });
         }
@@ -842,12 +930,14 @@ window.addEventListener("load", async () => {
                 );
                 tr.page.failed++;
                 genMsgFile(filename);
+                updateDledChap();
                 await zipChap();
               } else if (!$nodes.find(".uk-zjimg img").length) {
                 const filename = "VIP專屬.txt";
                 chap_dir.file(filename, "請使用VIP帳戶下載！\n");
                 tr.page.failed++;
                 genMsgFile(filename);
+                updateDledChap();
                 await zipChap();
               } else {
                 const imgs = $nodes.find(".uk-zjimg img").toArray();
@@ -908,6 +998,21 @@ window.addEventListener("load", async () => {
             toplv_dir.file(`${chap_dirname}.zip`, chap_blob, {
               binary: true,
             });
+          }
+
+          async function updateDledChap() {
+            while (mangadl.f) {
+              await new Promise((res) => {
+                setTimeout(res, 1_000);
+              });
+            }
+            mangadl.f = true;
+            mangadl.net_chap--;
+            const finished_chap = Number(
+              $("#dl-percentage").text().split("/")[0],
+            );
+            $("#dl-percentage").text(`${finished_chap}/${mangadl.net_chap}`);
+            mangadl.f = false;
           }
 
           function genMsgFile(filename) {
