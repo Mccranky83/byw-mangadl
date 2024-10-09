@@ -158,11 +158,11 @@ window.addEventListener("load", async () => {
             }
             #uk-sidebar {
               position: fixed;
-              top: 0;
+              bottom: 0;
               right: -100%;
               width: 30%;
               max-width: 50%;
-              height: 100%;
+              height: 50%;
               background-color: white;
               color: black;
               padding: 20px;
