@@ -192,6 +192,11 @@ window.addEventListener("load", async () => {
               border: 1px solid black;
               opacity: 0;
               transition: opacity 0.5s ease, bottom 0.5s ease;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              display: inline-block;
+              max-width: 100%;
             }
             #uk-sidebar:hover .abort-dialog {
               opacity: 1;
@@ -361,7 +366,6 @@ window.addEventListener("load", async () => {
             const css = `
               #injected span {
                 padding: 2px 8px;
-                display: inline;
               }
               #injected select {
                 width: 80px;
@@ -382,6 +386,9 @@ window.addEventListener("load", async () => {
                 text-align: center;
                 padding: 2%;
                 box-sizing: border-box;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
               }
               .range-container,
               .tooltip-container {
@@ -415,7 +422,7 @@ window.addEventListener("load", async () => {
                   position: absolute;
                   z-index: 1500;
                   right: 0%;
-                  top: 100%;
+                  bottom: 100%;
                   white-space: normal;
               }
               .tooltip-button:hover + .tooltip-text {
@@ -841,7 +848,7 @@ window.addEventListener("load", async () => {
                 `${mangadl.manga_name}.zip`,
               );
             }
-          }, 1_000);
+          }, 500);
           await limitParDl(
             mangadl.chap_dllist,
             getImgList,
@@ -998,7 +1005,8 @@ window.addEventListener("load", async () => {
               },
             });
             let toplv_dir = {};
-            const payload = 2 * Math.pow(1024, 3);
+            // Pending feature
+            const payload = 512 * Math.pow(1024, 2); // 0.5 GB
             const createZip = () => {
               const zip = new JSZip();
               mangadl.zip.push(zip);
@@ -1008,7 +1016,7 @@ window.addEventListener("load", async () => {
               await timeout(1_000);
             }
             mangadl.storing = true;
-            if (mangadl.zip.length > 1) {
+            if (mangadl.zip.length) {
               const size = (
                 await mangadl.zip[mangadl.zip.length - 1].generateAsync({
                   type: "uint8array",
@@ -1016,8 +1024,8 @@ window.addEventListener("load", async () => {
                 })
               ).length;
               if (size > payload) toplv_dir = createZip();
-            } else if (!mangadl.zip.length) toplv_dir = createZip();
-            else toplv_dir = mangadl.zip[mangadl.zip.length - 1];
+              else toplv_dir = mangadl.zip[mangadl.zip.length - 1];
+            } else toplv_dir = createZip();
             mangadl.storing = false;
             toplv_dir.file(`${chap_dirname}.zip`, chap_blob, {
               binary: true,
@@ -1051,7 +1059,7 @@ window.addEventListener("load", async () => {
           const filename = url.split("/").reverse()[0];
           const timeout = 60_000;
           const wait = 5_000;
-          const retry = 3; // Pending feature
+          const retry = 5; // Pending feature
           const hide_retry_logs = true;
           if (location.href.includes("ant")) await ant_f();
           else await zero_f();
