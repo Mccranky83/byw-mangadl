@@ -16,6 +16,7 @@ Download manga from the following sources as zip archives :package:
 ## Installation
 
 - [Download from GitHub](https://github.com/Mccranky83/byw-mangadl/raw/main/antbyw-mangadl.user.js)
+- [Download from GreasyFork](https://update.greasyfork.org/scripts/512076/antbyw%E4%B8%8B%E8%BC%89.user.js)
 
 ## Usage
 

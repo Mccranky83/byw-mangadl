@@ -12,8 +12,8 @@
 // @grant        GM_xmlhttpRequest
 // @connect      zerobywz.com
 // @connect      antbyw.com
-// @updateURL    https://github.com/Mccranky83/byw-mangadl/raw/master/antbyw-mangadl.meta.js
-// @downloadURL  https://github.com/Mccranky83/byw-mangadl/raw/master/antbyw-mangadl.user.js
+// @updateURL    https://github.com/Mccranky83/byw-mangadl/raw/main/antbyw-mangadl.meta.js
+// @downloadURL  https://github.com/Mccranky83/byw-mangadl/raw/main/antbyw-mangadl.user.js
 // @license      MIT
 // ==/UserScript==
 
