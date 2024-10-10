@@ -25,6 +25,11 @@ Download manga from the following sources as zip archives :package:
 3. Coffee break ~ :coffee:
 4. Return to find your manga in the `~/Downloads` folder
 
+### Keyboard Shortcuts
+
+- `<C-o>` - Open sidebar menu (same as clicking the floating menu ball)
+- `<C-q>` - Close sidebar menu (same as clicking the cross)
+
 ## Development Environment
 
 | Browser                                                                                                   | [Tampermonkey](http://tampermonkey.net/)                                            |
