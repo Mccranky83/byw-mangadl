@@ -9,10 +9,6 @@ Download manga from the following sources as zip archives :package:
 
 ## Preview
 
-<div align="center">
-  <video src="./Usage.mp4" />
-</div>
-
 ![Sidebar menu](https://raw.githubusercontent.com/Mccranky83/byw-mangadl/master/Preview.png)
 
 ## Installation
