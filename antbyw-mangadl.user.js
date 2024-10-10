@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         antbyw下载
-// @namespace    http://tampermonkey.net/
-// @version      2024-09-10
-// @description  下载单行本漫画
+// @name         antbyw下載
+// @version      1.0
+// @namespace    mccranky83.github.io
+// @description  下載搬運網單行本漫畫
 // @author       mccranky
 // @match        http://*/plugin.php?id=jameson_manhua*a=bofang*kuid*
 // @match        http://*/plugin.php?id=jameson_manhua*kuid*a=bofang*
@@ -12,6 +12,9 @@
 // @grant        GM_xmlhttpRequest
 // @connect      zerobywz.com
 // @connect      antbyw.com
+// @updateURL    https://github.com/Mccranky83/byw-mangadl/raw/master/antbyw-mangadl.meta.js
+// @downloadURL  https://github.com/Mccranky83/byw-mangadl/raw/master/antbyw-mangadl.user.js
+// @license      MIT
 // ==/UserScript==
 
 "use strict";
