@@ -1,5 +1,8 @@
 # byw-manga downloader
 
+<div align="center">
+  <video src="https://github.com/user-attachments/assets/5962a5b6-d188-4455-83c2-25325905f649" />
+</div>
 <img src="https://www.google.com/s2/favicons?sz=64&domain=zerobywz.com" height="80" align="right"/>
 
 Download manga from the following sources as zip archives :package:
