@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         byw Manga Downloader
+// @name         byw漫畫下載
 // @version      1.0
 // @namespace    mccranky83.github.io
 // @description  下載搬運網單行本漫畫
