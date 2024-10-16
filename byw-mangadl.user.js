@@ -53,6 +53,7 @@ window.addEventListener("load", async () => {
             this.dling = false;
             this.zip = [];
             this.storing = false;
+            this.retry = 0;
 
             // Logging
             this.f = false;
@@ -313,6 +314,11 @@ window.addEventListener("load", async () => {
               <option value=${i + 1} ${i === MAX_CHAP_PAR - 1 ? "selected" : ""}>${(i + 1) * MAX_IMG_PAR_MULTI}</option>
             `,
           );
+          const retry = [...Array(10)].map(
+            (_, i) => `
+              <option value=${i + 1} ${i === 4 ? "selected" : ""}>${i + 1}</option>
+            `,
+          );
           entry.join("\n");
           end.join("\n");
           const menu_html = `
@@ -324,6 +330,15 @@ window.addEventListener("load", async () => {
               <div class="range-container">
                 <span>結束：</span>
                 <select name="end" class="uk-select">${end}</select>
+              </div>
+              <div class="tooltip-container">
+                <span>重試：</span>
+                <select name="retry" class="uk-select">${retry}</select>
+                <button class="tooltip-button">?</button>
+                <div class="tooltip-text">
+                  <p>Number of retries after image download fails.</p>
+                  <p>圖片下載失敗後重試次數。</p>
+                </div>
               </div>
               <div class="tooltip-container">
                 <span>併發章節數：</span>
@@ -754,6 +769,7 @@ window.addEventListener("load", async () => {
           }
           mangadl.max_chap_par = Number($("#injected [name='chap-par']").val());
           mangadl.max_img_par = Number($("#injected [name='img-par']").val());
+          mangadl.retry = Number($("#injected [name='retry']").val());
 
           await dl();
         }
@@ -1061,7 +1077,7 @@ window.addEventListener("load", async () => {
           const filename = url.split("/").reverse()[0];
           const timeout = 60_000;
           const wait = 5_000;
-          const retry = 5; // Pending feature
+          const retry = mangadl.retry;
           const hide_retry_logs = true;
           if (location.href.includes("ant")) await ant_f();
           else await zero_f();
