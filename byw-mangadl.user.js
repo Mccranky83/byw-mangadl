@@ -52,13 +52,31 @@ window.addEventListener("load", async () => {
             this.max_img_par = 0;
             this.dling = false;
             this.zip = [];
-            this.storing = false;
+            this.storing = new this.Mutex();
             this.retry = 0;
-
-            // Logging
-            this.f = false;
+            this.updating = new this.Mutex();
             this.net_chap = 0;
           }
+
+          Mutex = class {
+            constructor() {
+              this.locked = false;
+              this.queue = [];
+            }
+            async lock() {
+              return new Promise((res) => {
+                if (this.locked) this.queue.push(res);
+                else {
+                  this.locked = true;
+                  res();
+                }
+              });
+            }
+            unlock() {
+              if (this.queue.length) this.queue.shift()();
+              else this.locked = false;
+            }
+          };
 
           init() {
             if (!$("#mangadl-retry").attr("class").includes("none")) {
@@ -166,7 +184,7 @@ window.addEventListener("load", async () => {
               right: -100%;
               width: 30%;
               max-width: 50%;
-              height: 50%;
+              height: 60%;
               background-color: white;
               color: black;
               padding: 20px;
@@ -1031,10 +1049,7 @@ window.addEventListener("load", async () => {
               mangadl.zip.push(zip);
               return zip;
             };
-            while (mangadl.storing) {
-              await timeout(1_000);
-            }
-            mangadl.storing = true;
+            await mangadl.storing.lock();
             if (mangadl.zip.length) {
               const size = (
                 await mangadl.zip[mangadl.zip.length - 1].generateAsync({
@@ -1045,23 +1060,20 @@ window.addEventListener("load", async () => {
               if (size > payload) toplv_dir = createZip();
               else toplv_dir = mangadl.zip[mangadl.zip.length - 1];
             } else toplv_dir = createZip();
-            mangadl.storing = false;
+            mangadl.storing.unlock();
             toplv_dir.file(`${chap_dirname}.zip`, chap_blob, {
               binary: true,
             });
           }
 
           async function updateDledChap() {
-            while (mangadl.f) {
-              await timeout(1_000);
-            }
-            mangadl.f = true;
+            await mangadl.updating.lock();
             mangadl.net_chap--;
             const finished_chap = Number(
               $("#dl-percentage").text().split("/")[0],
             );
             $("#dl-percentage").text(`${finished_chap}/${mangadl.net_chap}`);
-            mangadl.f = false;
+            mangadl.updating.unlock();
           }
 
           function genMsgFile(filename) {
