@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         byw漫畫下載
-// @version      1.0.2
+// @version      2024-10-17
 // @namespace    mccranky83.github.io
 // @description  下載搬運網單行本漫畫
 // @author       mccranky
