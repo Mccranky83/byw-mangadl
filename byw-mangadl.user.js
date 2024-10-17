@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         byw漫畫下載
-// @version      2024-10-16
+// @version      2024-10-17
 // @namespace    mccranky83.github.io
 // @description  下載搬運網單行本漫畫
 // @author       mccranky
@@ -699,10 +699,11 @@ window.addEventListener("load", async () => {
             this.counter = max_par;
             this.waitlist = [];
             this.paused = false;
+            this.pauseRes = [];
             this.terminated = false;
           }
           async acquire() {
-            await this.checkStat();
+            await this.check();
             if (this.counter > 0) this.counter--;
             else
               await new Promise((res) => {
@@ -710,26 +711,26 @@ window.addEventListener("load", async () => {
               });
           }
           async release() {
-            await this.checkStat();
+            await this.check();
             if (this.waitlist.length > 0) {
               this.counter--;
               this.waitlist.shift()();
             }
-            /*
-             * Placed at the end of the method
-             * Prevents new acquisitions from bypassing the waitlist
-             */
             this.counter++;
           }
-          async checkStat() {
-            while (this.paused) await timeout(100);
+          async check() {
+            this.paused &&
+              (await new Promise((res) => {
+                this.pauseRes.push(res);
+              }));
           }
           togglePause() {
             this.paused = !this.paused;
+            !this.paused && this.pauseRes.forEach((cur) => cur());
           }
           terminate() {
             this.terminated = true;
-            // Waitlist can be purged, but all requests sent must resolve
+            // Requests sent must all resolve before continuing
             if (this.paused) this.togglePause();
             this.waitlist.forEach((cur) => {
               cur();
@@ -878,7 +879,7 @@ window.addEventListener("load", async () => {
                 if (!fc_chap(true))
                   console.log(`${mangadl.manga_name}: all clear!`);
                 else {
-                  if (s_chap.terminated)
+                  s_chap.terminated &&
                     console.error(`${mangadl.manga_name}: terminated!`);
                   throw new Error(
                     `缺失章節：${fc_chap(true)}/${sc_chap(true)} (Total: ${tr.chap.net})`,
