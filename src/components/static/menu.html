@@ -1,0 +1,76 @@
+<div id="injected">
+  <div class="range-container">
+    <span>開始：</span>
+    <select name="entry" class="uk-select"></select>
+  </div>
+  <div class="range-container">
+    <span>結束：</span>
+    <select name="end" class="uk-select"></select>
+  </div>
+  <div class="tooltip-container">
+    <span>重試：</span>
+    <select name="retry" class="uk-select"></select>
+    <button class="tooltip-button">?</button>
+    <div class="tooltip-text">
+      <p>Number of retries after image download fails.</p>
+      <p>圖片下載失敗後重試次數。</p>
+    </div>
+  </div>
+  <div class="tooltip-container">
+    <span>併發章節數：</span>
+    <select name="chap-par" class="uk-select"></select>
+    <button class="tooltip-button">?</button>
+    <div class="tooltip-text">
+      <p>
+        Bigger the value, larger the number of concurrent chapter fetches. But
+        because the browser can only handle a limited number of concurrent
+        requests, it is recommended to use the options listed below.
+      </p>
+      <p>
+        數值越大，同時下載章節的數量就越多。但由於瀏覽器只能處理有限的並發請求，建議使用以下選項。
+      </p>
+    </div>
+  </div>
+  <div class="tooltip-container">
+    <span>併發圖片數：</span>
+    <select name="img-par" class="uk-select"></select>
+    <button class="tooltip-button">?</button>
+    <div class="tooltip-text">
+      <p>
+        Bigger the value, larger the number of concurrent image fetches. But
+        because the browser can only handle a limited number of concurrent
+        requests, it is recommended to use the options listed below.
+      </p>
+      <p>
+        數值越大，同時下載圖片的數量就越多。但由於瀏覽器只能處理有限的並發請求，建議使用以下選項。
+      </p>
+    </div>
+  </div>
+  <div class="mtm grid-container">
+    <a href="javascript:;" class="uk-button uk-button-danger" id="mangadl-all">
+      <span>打包下載</span>
+    </a>
+    <a
+      href="javascript:;"
+      class="uk-button uk-button-primary none"
+      style="background-color: black"
+      id="mangadl-retry"
+    >
+      <span>重新下載</span>
+    </a>
+    <a
+      href="javascript:;"
+      class="uk-button uk-button-primary"
+      id="manual-pause"
+    >
+      <span>手動暫停</span>
+    </a>
+    <a
+      href="javascript:;"
+      class="uk-button uk-button-primary"
+      id="manual-select"
+    >
+      <span>手動選擇</span>
+    </a>
+  </div>
+</div>

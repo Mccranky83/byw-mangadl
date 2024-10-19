@@ -1,0 +1,71 @@
+#injected span {
+  padding: 2px 8px;
+}
+#injected select {
+  width: 80px;
+  height: 30px;
+  line-height: 30px;
+  border-radius: 2px;
+}
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2%;
+}
+.grid-container .uk-button {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 5vh;
+  text-align: center;
+  padding: 2%;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.range-container,
+.tooltip-container {
+  position: relative;
+  display: inline-block;
+  margin-top: 10px;
+}
+.tooltip-button {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  font-size: 10px;
+  text-align: center;
+  line-height: 20px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tooltip-text {
+  visibility: hidden;
+  width: 250px;
+  background-color: #555;
+  color: #fff;
+  text-align: left;
+  border-radius: 5px;
+  padding: 10px;
+  position: absolute;
+  z-index: 1500;
+  right: 0%;
+  bottom: 100%;
+  white-space: normal;
+}
+.tooltip-button:hover + .tooltip-text {
+  visibility: visible;
+  opacity: 1;
+}
+.tooltip-text p {
+  margin: 0 0 10px;
+}
+.tooltip-text p:last-child {
+  margin-bottom: 0;
+}

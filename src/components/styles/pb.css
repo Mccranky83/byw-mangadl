@@ -1,0 +1,95 @@
+#dl-bar {
+  border: 1px solid black;
+  height: 20px;
+  width: 400px;
+  display: none;
+  position: relative;
+  background-color: #f3f3f3;
+  overflow: hidden;
+}
+#dl-progress-failed {
+  height: 100%;
+  width: 0%;
+  background-color: red;
+  position: absolute;
+  transition: width 0.5s ease;
+}
+#dl-progress {
+  height: 100%;
+  width: 0%;
+  background-color: green;
+  position: absolute;
+  transition: width 0.5s ease;
+}
+#dl-info {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 12px;
+  z-index: 999999;
+  color: black;
+}
+#dl-percentage-container {
+  display: none;
+  position: fixed !important;
+  z-index: 999999 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+}
+#dl-percentage-container > a {
+  display: flex !important;
+  position: relative !important;
+  min-width: 1vh !important;
+  min-height: 1vh !important;
+  max-width: max-content !important;
+  max-height: max-content !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 0.2vh solid black !important;
+  border-radius: 0.4vh !important;
+  padding: 0.6vh !important;
+  margin: 1.2vh !important;
+  margin-left: auto !important;
+  font-weight: bold !important;
+  font-size: 1.9vh !important;
+  text-decoration: none !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  transition:
+    top 0.05s ease-out,
+    right 0.05s ease-out,
+    bottom 0.05s ease-out,
+    left 0.05s ease-out,
+    box-shadow 0.05s ease-out !important;
+  background-color: white;
+  color: black;
+}
+#dl-percentage-container > a.disabled {
+  pointer-events: none !important;
+  opacity: 0.5 !important;
+}
+#dl-percentage-container > a:hover {
+  filter: brightness(90%);
+}
+#dl-percentage-container > a:active {
+  filter: brightness(75%);
+}
+#dl-percentage-container > a.animate-click {
+  bottom: 0vh;
+  right: 0vh;
+  box-shadow:
+    black 0.05vh 0.05vh,
+    black 0.1vh 0.1vh,
+    black 0.15vh 0.15vh,
+    black 0.2vh 0.2vh,
+    black 0.25vh 0.25vh,
+    black 0.3vh 0.3vh,
+    black 0.35vh 0.35vh,
+    black 0.4vh 0.4vh;
+}
+#dl-percentage-container > a.animate-click:active {
+  bottom: -0.4vh;
+  right: -0.4vh;
+  box-shadow: none;
+}

@@ -1,0 +1,57 @@
+#cursor-pointer,
+#vertical-line,
+#horizontal-line {
+  position: fixed;
+  z-index: 2000;
+  pointer-events: none;
+  display: none;
+}
+#cursor-pointer {
+  --cursor-diameter: 20px;
+  width: var(--cursor-diameter);
+  height: var(--cursor-diameter);
+  border-radius: 50%;
+  background-color: blue;
+  opacity: 0.5;
+}
+#vertical-line,
+#horizontal-line {
+  background-color: blue;
+  opacity: 0.5;
+}
+#vertical-line {
+  width: 1px;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(blue 50%, transparent 50%);
+  background-size: 100% 20px;
+  animation: moveDown 1s linear infinite;
+}
+#horizontal-line {
+  height: 1px;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: linear-gradient(to right, blue 50%, transparent 50%);
+  background-size: 20px 100%;
+  animation: moveRight 1s linear infinite;
+}
+@keyframes moveDown {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 0 20px;
+  }
+}
+@keyframes moveRight {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 20px 0;
+  }
+}

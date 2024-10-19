@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         byw漫畫下載
-// @version      2024-10-17
+// @version      2024-10-19
 // @namespace    mccranky83.github.io
 // @description  下載搬運網單行本漫畫
-// @author       mccranky
+// @author       Mccranky83
 // @match        http://*/plugin.php?id=jameson_manhua*a=bofang*kuid*
 // @match        http://*/plugin.php?id=jameson_manhua*kuid*a=bofang*
 // @match        https://*/plugin.php?id=jameson_manhua*a=bofang*kuid*
