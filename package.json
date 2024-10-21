@@ -4,7 +4,8 @@
   "description": "下載搬運網單行本漫畫",
   "scripts": {
     "build": "webpack",
-    "build:dev": "webpack --mode development"
+    "build:dev": "webpack --mode development",
+    "report": "cloc --exclude-list-file=.exclude . >./report.md 2>/dev/null"
   },
   "type": "module",
   "author": "Mccranky83",
