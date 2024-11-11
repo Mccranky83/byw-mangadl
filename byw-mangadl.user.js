@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         byw漫畫下載
-// @version      2024-10-19
+// @version      2024-11-11
 // @namespace    mccranky83.github.io
 // @description  下載搬運網單行本漫畫
 // @author       Mccranky83
@@ -10391,6 +10391,7 @@
                               dt("#dl-percentage").text(""),
                               dt("#manual-pause").text("手動暫停"),
                               dt("#manual-select").show(),
+                              dt("#clear-selection").show(),
                               (A.net_chap = 0),
                               (A.dling = !1);
                           })
@@ -10879,8 +10880,9 @@
                         kt("#mangadl-all")
                           .attr("dling", A.dling)
                           .text("下載中"),
-                        kt("#manual-select").hide();
-                    case 9:
+                        kt("#manual-select").hide(),
+                        kt("#clear-selection").hide();
+                    case 10:
                       return (
                         kt(".muludiv").each(function (t, e) {
                           "rgb(127, 187, 179)" ===
@@ -10911,10 +10913,10 @@
                         (A.retry = Number(
                           kt("#injected [name='retry']").val(),
                         )),
-                        (t.next = 16),
+                        (t.next = 17),
                         xt()
                       );
-                    case 16:
+                    case 17:
                     case "end":
                       return t.stop();
                   }
@@ -11103,7 +11105,7 @@
                 .concat(e + 1, "</option>\n            ");
             });
           _t("div#uk-sidebar .uk-container").append(
-            '<div id="injected"> <div class="range-container"> <span>開始：</span> <select name="entry" class="uk-select"></select> </div> <div class="range-container"> <span>結束：</span> <select name="end" class="uk-select"></select> </div> <div class="tooltip-container"> <span>重試：</span> <select name="retry" class="uk-select"></select> <button class="tooltip-button">?</button> <div class="tooltip-text"> <p>Number of retries after image download fails.</p> <p>圖片下載失敗後重試次數。</p> </div> </div> <div class="tooltip-container"> <span>併發章節數：</span> <select name="chap-par" class="uk-select"></select> <button class="tooltip-button">?</button> <div class="tooltip-text"> <p> Bigger the value, larger the number of concurrent chapter fetches. But because the browser can only handle a limited number of concurrent requests, it is recommended to use the options listed below. </p> <p> 數值越大，同時下載章節的數量就越多。但由於瀏覽器只能處理有限的並發請求，建議使用以下選項。 </p> </div> </div> <div class="tooltip-container"> <span>併發圖片數：</span> <select name="img-par" class="uk-select"></select> <button class="tooltip-button">?</button> <div class="tooltip-text"> <p> Bigger the value, larger the number of concurrent image fetches. But because the browser can only handle a limited number of concurrent requests, it is recommended to use the options listed below. </p> <p> 數值越大，同時下載圖片的數量就越多。但由於瀏覽器只能處理有限的並發請求，建議使用以下選項。 </p> </div> </div> <div class="mtm grid-container"> <a href="javascript:;" class="uk-button uk-button-danger" id="mangadl-all"> <span>打包下載</span> </a> <a href="javascript:;" class="uk-button uk-button-primary none" style="background-color:#000" id="mangadl-retry"> <span>重新下載</span> </a> <a href="javascript:;" class="uk-button uk-button-primary" id="manual-pause"> <span>手動暫停</span> </a> <a href="javascript:;" class="uk-button uk-button-primary" id="manual-select"> <span>手動選擇</span> </a> </div> </div> ',
+            '<div id="injected"> <div class="range-container"> <span>開始：</span> <select name="entry" class="uk-select"></select> </div> <div class="range-container"> <span>結束：</span> <select name="end" class="uk-select"></select> </div> <div class="tooltip-container"> <span>重試：</span> <select name="retry" class="uk-select"></select> <button class="tooltip-button">?</button> <div class="tooltip-text"> <p>Number of retries after image download fails.</p> <p>圖片下載失敗後重試次數。</p> </div> </div> <div class="tooltip-container"> <span>併發章節數：</span> <select name="chap-par" class="uk-select"></select> <button class="tooltip-button">?</button> <div class="tooltip-text"> <p> Bigger the value, larger the number of concurrent chapter fetches. But because the browser can only handle a limited number of concurrent requests, it is recommended to use the options listed below. </p> <p> 數值越大，同時下載章節的數量就越多。但由於瀏覽器只能處理有限的並發請求，建議使用以下選項。 </p> </div> </div> <div class="tooltip-container"> <span>併發圖片數：</span> <select name="img-par" class="uk-select"></select> <button class="tooltip-button">?</button> <div class="tooltip-text"> <p> Bigger the value, larger the number of concurrent image fetches. But because the browser can only handle a limited number of concurrent requests, it is recommended to use the options listed below. </p> <p> 數值越大，同時下載圖片的數量就越多。但由於瀏覽器只能處理有限的並發請求，建議使用以下選項。 </p> </div> </div> <div class="mtm grid-container"> <a href="javascript:;" class="uk-button uk-button-danger" id="mangadl-all"> <span>打包下載</span> </a> <a href="javascript:;" class="uk-button uk-button-primary none" style="background-color:#000" id="mangadl-retry"> <span>重新下載</span> </a> <a href="javascript:;" class="uk-button uk-button-primary" id="manual-pause"> <span>手動暫停</span> </a> <a href="javascript:;" class="uk-button uk-button-primary" id="manual-select"> <span>手動選擇</span> </a> <a href="javascript:;" class="uk-button uk-button-primary" id="clear-selection"> <span>取消選擇</span> </a> </div> </div> ',
           ),
             _t("#injected [name=entry]").html(t.join("\n")),
             _t("#injected [name=end]").html(e.join("\n")),
@@ -11111,7 +11113,12 @@
             _t("#injected [name=chap-par]").html(n.join("\n")),
             _t("#injected [name=img-par]").html(r.join("\n")),
             _t("#mangadl-all").on("click", St),
-            _t("#mangadl-retry").on("click", Ot);
+            _t("#mangadl-retry").on("click", Ot),
+            _t("#clear-selection").on("click", function () {
+              _t(".muludiv").each(function (t, e) {
+                _t(e).css("background-color", "");
+              });
+            });
         })(),
         (function () {
           Ht(document.body).append(

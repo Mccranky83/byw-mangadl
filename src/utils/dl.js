@@ -142,6 +142,7 @@ export default async function () {
 
       $("#manual-pause").text("手動暫停");
       $("#manual-select").show();
+      $("#clear-selection").show();
       mangadl.net_chap = 0;
       mangadl.dling = false;
     });

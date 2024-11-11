@@ -41,4 +41,9 @@ export default function () {
   $("#injected [name=img-par]").html(img_par.join("\n"));
   $("#mangadl-all").on("click", dlAll);
   $("#mangadl-retry").on("click", dlRetry);
+  $("#clear-selection").on("click", () => {
+    $(".muludiv").each((i, cur) => {
+      $(cur).css("background-color", "");
+    });
+  });
 }

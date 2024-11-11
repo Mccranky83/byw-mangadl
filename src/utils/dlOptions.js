@@ -10,6 +10,7 @@ export async function dlAll() {
     mangadl.dling = true;
     $("#mangadl-all").attr("dling", mangadl.dling).text("下載中");
     $("#manual-select").hide();
+    $("#clear-selection").hide();
   }
 
   // Fetch select values
