@@ -8,7 +8,7 @@
 
 Download manga from the following sources as zip archives :package:
 
-- [zerobyw](https://antbyw.github.io/)
+- [zerobyw](https://zerobyw.github.io/)
 - [antbyw](https://antbyw.github.io/)
 
 ## Preview
