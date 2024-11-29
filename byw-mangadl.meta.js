@@ -10,7 +10,7 @@
 // @match        https://*/plugin.php?id=jameson_manhua*kuid*a=bofang*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=antbyw.com
 // @grant        GM_xmlhttpRequest
-// @connect      zerobywz.com
+// @connect      zerobywav.com
 // @updateURL    https://github.com/Mccranky83/byw-mangadl/raw/main/byw-mangadl.meta.js
 // @downloadURL  https://github.com/Mccranky83/byw-mangadl/raw/main/byw-mangadl.user.js
 // @license      MIT
