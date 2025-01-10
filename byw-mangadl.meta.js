@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         byw漫畫下載
-// @version      2024-12-26
+// @version      2025-01-10
 // @namespace    mccranky83.github.io
 // @description  下載搬運網單行本漫畫
 // @author       Mccranky83
@@ -11,7 +11,7 @@
 // @match        https://mangatoto.com/title/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=antbyw.com
 // @grant        GM_xmlhttpRequest
-// @connect      zerobywmy.com
+// @connect      zerobywzip.com
 // @updateURL    https://github.com/Mccranky83/byw-mangadl/raw/main/byw-mangadl.meta.js
 // @downloadURL  https://github.com/Mccranky83/byw-mangadl/raw/main/byw-mangadl.user.js
 // @license      MIT
