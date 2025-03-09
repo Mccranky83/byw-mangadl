@@ -3,7 +3,7 @@
 > Used 'Slow 4G' network throttling to intentionally cause failures for demonstration purposes!
 
 <div align="center">
-  <video src="https://github.com/user-attachments/assets/5962a5b6-d188-4455-83c2-25325905f649" />
+  <video width="800" height="400" src="https://github.com/user-attachments/assets/5962a5b6-d188-4455-83c2-25325905f649" />
 </div>
 
 Download manga from the following sources as zip archives :package:
