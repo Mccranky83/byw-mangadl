@@ -14,7 +14,7 @@ A Tampermonkey userscript that downloads manga chapters from [zerobywai.com](htt
 
 2. Click the link below to install the script directly:
 
-   **[⬇ Install zerobywai-mangadl.user.js](https://raw.githubusercontent.com/YOUR_USERNAME/zerobywai-mangadl/main/zerobywai-mangadl.user.js)**
+   **[⬇ Install zerobywai-mangadl.user.js](zerobywai-mangadl.user.js)**
 
 3. Tampermonkey will open an install confirmation page — click **Install**.
 
