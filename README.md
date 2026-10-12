@@ -1,5 +1,7 @@
 # byw-manga downloader
 
+> UPDATE: 站长已经将网页前端全部重做, 本项目也就此失效. 本人近期比较忙, 但不会放弃本项目, 会考虑更新. 如需紧急下载方式, 请见[issue#13](https://github.com/Mccranky83/byw-mangadl/issues/13)
+
 > Used 'Slow 4G' network throttling to intentionally cause failures for demonstration purposes!
 
 <div align="center">
