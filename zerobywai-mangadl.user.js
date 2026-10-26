@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         zerobywai 漫畫下載
-// @version      1.2.0
-// @namespace    https://github.com/YOUR_USERNAME/zerobywai-mangadl
+// @version      1.3.0
+// @namespace    https://github.com/jyltsang/zerobywai-downloader
 // @description  Download manga chapters from zerobywai.com — JPG per page or PDF per chapter, bulk selection, parallel downloads
 // @author       Mccranky83 (original); patched for new site structure
 // @license      MIT
@@ -13,11 +13,22 @@
 // @connect      tupa.zerobywai.com
 // @connect      www.zerobywai.com
 // @require      https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js
-// @downloadURL  https://raw.githubusercontent.com/YOUR_USERNAME/zerobywai-mangadl/main/zerobywai-mangadl.user.js
-// @updateURL    https://raw.githubusercontent.com/YOUR_USERNAME/zerobywai-mangadl/main/zerobywai-mangadl.user.js
+// @downloadURL  https://raw.githubusercontent.com/jyltsang/zerobywai-downloader/main/zerobywai-mangadl.user.js
+// @updateURL    https://raw.githubusercontent.com/jyltsang/zerobywai-downloader/main/zerobywai-mangadl.user.js
 // ==/UserScript==
 
 /*
+  v1.3.0 — Reliability fixes
+  ────────────────────────────
+  • Viewer page no longer freezes the tab (self-triggering MutationObserver removed)
+  • Range selection matches zero-padded labels ("01" is chapter 1); reversed ranges work
+  • Numeric chapter labels are zero-padded in filenames (ch001) so files sort correctly
+  • Failed requests are retried with back-off; chapter pages are checked for HTTP errors
+  • Image URLs are resolved to absolute URLs; extensions are read from the URL path
+  • PDF images are passed to jsPDF as bytes (no base64 round trip, format auto-detected)
+  • Abort is available on the viewer page and is reported correctly in bulk mode
+  • Overall progress no longer stalls short of 100 % when pages fail in PDF mode
+
   v1.2.0 — JPG or PDF output choice
   ────────────────────────────────────
   • JPG mode  — each page saved as an individual file to ~/Downloads via GM_download
@@ -39,13 +50,14 @@
   // ── Config ────────────────────────────────────────────────────────────────────
   const CONCURRENT_DOWNLOADS = 5;  // parallel image fetches per chapter
   const CHAPTER_GAP_MS       = 300; // ms pause between chapters in bulk mode
+  const MAX_RETRIES          = 3;   // extra attempts per request after the first failure
+  const RETRY_BASE_MS        = 1000; // back-off: 1 s, 2 s, 4 s …
+  const IMG_HOST             = 'tupa.zerobywai.com';
 
   // ── State ─────────────────────────────────────────────────────────────────────
   let isDownloading = false;
   let abortFlag     = false;
   let outputMode    = 'jpg'; // 'jpg' | 'pdf'
-  let globalDone    = 0;
-  let globalTotal   = 0;
 
   // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -55,10 +67,48 @@
     return (s || 'manga').replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ').trim();
   }
 
+  // Pure numeric labels ("1", "01", "12.5") are padded to three digits so files sort
+  // naturally; anything else ("番外", "第3話") is kept as-is to avoid name collisions
+  function chapterTag(label) {
+    const m = String(label).trim().match(/^(\d+)(\.\d+)?$/);
+    if (m) return m[1].padStart(3, '0') + (m[2] || '');
+    return safeFilename(label).replace(/\s+/g, '_') || 'unknown';
+  }
+
+  // First number in a label, used for range selection ("01" → 1, "第3話" → 3)
+  function chapterNumber(label) {
+    const m = String(label).match(/\d+(?:\.\d+)?/);
+    return m ? parseFloat(m[0]) : NaN;
+  }
+
+  function imageExtension(url) {
+    try {
+      const m = new URL(url).pathname.match(/\.([a-z0-9]{2,5})$/i);
+      return m ? m[1].toLowerCase() : 'jpg';
+    } catch {
+      return 'jpg';
+    }
+  }
+
+  // Retries an async operation with exponential back-off; aborting stops the retries
+  async function withRetry(fn, what) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        if (abortFlag || attempt >= MAX_RETRIES) throw err;
+        const delay = RETRY_BASE_MS * 2 ** attempt;
+        console.warn(`[zbw-dl] ${what} failed (${err.message}), retry ${attempt + 1}/${MAX_RETRIES} in ${delay} ms`);
+        await sleep(delay);
+      }
+    }
+  }
+
+  // Details page title: "<manga> - zero搬运网"; viewer: "<manga> - <chapter> - zero搬运网"
   function getMangaTitle() {
-    return safeFilename(
-      document.title.replace(/\s*[-–]\s*zero搬运网.*$/i, '').trim()
-    ) || 'manga';
+    let title = document.title.replace(/\s*[-–]\s*zero搬运网.*$/i, '').trim();
+    if (isViewerPage()) title = title.replace(/\s*[-–]\s*[^-–]*$/, '');
+    return safeFilename(title) || 'manga';
   }
 
   // Concurrency pool — runs tasks[] with at most `concurrency` in flight
@@ -78,6 +128,10 @@
   // ── Binary fetch (returns ArrayBuffer) ───────────────────────────────────────
   // Used for both JPG saves and PDF image embedding
   function fetchArrayBuffer(url) {
+    return withRetry(() => fetchArrayBufferOnce(url), `fetch ${url}`);
+  }
+
+  function fetchArrayBufferOnce(url) {
     return new Promise((resolve, reject) => {
       GM_xmlhttpRequest({
         method: 'GET', url,
@@ -92,14 +146,6 @@
         ontimeout() { reject(new Error('Timeout')); }
       });
     });
-  }
-
-  // ArrayBuffer → base64 string (needed by jsPDF)
-  function bufferToBase64(buffer) {
-    let binary = '';
-    const bytes = new Uint8Array(buffer);
-    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-    return btoa(binary);
   }
 
   // Trigger a browser save-file dialog for a Blob — works in Firefox sandbox
@@ -117,7 +163,7 @@
   function saveJpg(url, filename) {
     // Prefer GM_download (silent, no dialog) — fall back to blob trigger
     if (typeof GM_download === 'function') {
-      return new Promise((resolve, reject) => {
+      return withRetry(() => new Promise((resolve, reject) => {
         GM_download({
           url, name: filename,
           headers: { 'Referer': 'https://www.zerobywai.com/' },
@@ -125,7 +171,7 @@
           onerror(e)  { reject(new Error(`GM_download: ${JSON.stringify(e)}`)); },
           ontimeout() { reject(new Error('Timeout')); }
         });
-      });
+      }), `save ${filename}`);
     }
     // Fallback
     return fetchArrayBuffer(url).then(buf => {
@@ -150,17 +196,11 @@
     for (let i = 0; i < imageBuffers.length; i++) {
       if (abortFlag) throw new Error('Aborted');
 
-      const buf    = imageBuffers[i];
-      const b64    = bufferToBase64(buf);
-      const imgSrc = 'data:image/jpeg;base64,' + b64;
-
-      // Get image dimensions via a temporary Image element
-      const { w, h } = await new Promise(resolve => {
-        const img = new Image();
-        img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-        img.onerror = () => resolve({ w: 800, h: 1200 }); // fallback
-        img.src = imgSrc;
-      });
+      // jsPDF accepts raw bytes and detects JPEG/PNG/WebP from the file header,
+      // which avoids a large base64 string per page and a decode via <img>
+      const bytes = new Uint8Array(imageBuffers[i]);
+      const props = jsPDFCtor.API.getImageProperties(bytes);
+      const w = props.width, h = props.height;
 
       // Convert pixels → mm at 96 dpi  (1px = 0.2646mm)
       const mmW = w * 0.2646;
@@ -178,9 +218,10 @@
         doc.addPage([mmW, mmH], mmW > mmH ? 'landscape' : 'portrait');
       }
 
-      doc.addImage(imgSrc, 'JPEG', 0, 0, mmW, mmH, '', 'FAST');
+      doc.addImage(bytes, props.fileType, 0, 0, mmW, mmH, '', 'FAST');
 
       if (onProgress) onProgress(i + 1, imageBuffers.length);
+      await sleep(0); // yield so the progress bar can repaint between pages
     }
 
     if (!doc) throw new Error('No pages added to PDF');
@@ -202,28 +243,40 @@
       .filter(ch => ch.zjid && !seen.has(ch.zjid) && seen.add(ch.zjid));
   }
 
+  // Image URLs in document order, made absolute against `baseUrl` (the parsed
+  // chapter page may use protocol-relative or relative src attributes)
+  function extractImageUrls(doc, baseUrl) {
+    const seen = new Set();
+    return [...doc.querySelectorAll(`img[src*="${IMG_HOST}/manhua/"]`)]
+      .map(img => {
+        try { return new URL(img.getAttribute('src'), baseUrl).href; } catch { return null; }
+      })
+      .filter(url => url && !seen.has(url) && seen.add(url));
+  }
+
   function getImagesFromViewerDOM() {
-    return [...document.querySelectorAll('img[src*="tupa.zerobywai.com/manhua/"]')]
-      .map(img => img.src).filter(Boolean);
+    return extractImageUrls(document, location.href);
   }
 
   function fetchChapterImageUrls(zjid) {
-    return new Promise((resolve, reject) => {
+    const url = `https://www.zerobywai.com/pc/view/index.php?zjid=${encodeURIComponent(zjid)}`;
+    return withRetry(() => new Promise((resolve, reject) => {
       GM_xmlhttpRequest({
-        method: 'GET',
-        url: `https://www.zerobywai.com/pc/view/index.php?zjid=${zjid}`,
+        method: 'GET', url,
         timeout: 20000,
         headers: { 'Referer': 'https://www.zerobywai.com/' },
         onload(r) {
-          const doc  = new DOMParser().parseFromString(r.responseText, 'text/html');
-          const urls = [...doc.querySelectorAll('img[src*="tupa.zerobywai.com/manhua/"]')]
-            .map(img => img.getAttribute('src')).filter(Boolean);
-          resolve(urls);
+          if (r.status < 200 || r.status >= 300) {
+            reject(new Error(`HTTP ${r.status} fetching chapter ${zjid}`));
+            return;
+          }
+          const doc = new DOMParser().parseFromString(r.responseText, 'text/html');
+          resolve(extractImageUrls(doc, r.finalUrl || url));
         },
         onerror()   { reject(new Error(`Network error fetching chapter ${zjid}`)); },
         ontimeout() { reject(new Error(`Timeout fetching chapter ${zjid}`)); }
       });
-    });
+    }), `chapter ${zjid}`);
   }
 
   // ── Core chapter download ─────────────────────────────────────────────────────
@@ -233,10 +286,10 @@
     if (!imageUrls || imageUrls.length === 0) {
       imageUrls = await fetchChapterImageUrls(zjid);
     }
-    if (imageUrls.length === 0) throw new Error('No images found');
+    if (imageUrls.length === 0) throw new Error('找不到圖片 No images found (login/VIP required?)');
 
     const title   = getMangaTitle();
-    const chLabel = label.replace(/\s+/g, '_');
+    const chLabel = chapterTag(label);
 
     if (mode === 'pdf') {
       return downloadChapterAsPdf(title, chLabel, label, imageUrls, onProgress);
@@ -250,7 +303,7 @@
     let done = 0, failed = 0;
 
     const tasks = imageUrls.map((url, i) => async () => {
-      const ext      = (url.split('.').pop().split('?')[0] || 'jpg').toLowerCase();
+      const ext      = imageExtension(url);
       const pageNum  = String(i + 1).padStart(3, '0');
       const filename = `${title}_ch${chLabel}_${pageNum}.${ext}`;
       try {
@@ -264,6 +317,7 @@
     });
 
     await pool(tasks, CONCURRENT_DOWNLOADS);
+    if (abortFlag) throw new Error('Aborted');
     return { done, total: imageUrls.length, failed };
   }
 
@@ -298,15 +352,16 @@
     setStatus(`🖨 第${label}章：正在生成 PDF… / Ch.${label}: building PDF…`);
 
     const pdfBlob = await buildPdf(validBuffers, (pdfDone, pdfTotal) => {
-      // Phase 2 maps to the second half of the progress bar
-      const total = imageUrls.length * 2;
-      if (onProgress) onProgress(imageUrls.length + pdfDone, total, failed);
+      // Phase 2 maps to the second half of the progress bar, scaled so it still
+      // reaches 100 % when some pages failed to fetch in phase 1
+      const n = imageUrls.length;
+      if (onProgress) onProgress(n + Math.round(pdfDone * n / pdfTotal), n * 2, failed);
     });
 
     const filename = `${title}_ch${chLabel}.pdf`;
     triggerBlobSave(pdfBlob, filename);
 
-    return { done: validBuffers.length, total: imageUrls.length, failed };
+    return { done: imageUrls.length, total: imageUrls.length, failed };
   }
 
   // ── UI helpers ────────────────────────────────────────────────────────────────
@@ -349,7 +404,8 @@
 
   // ── Format toggle (JPG / PDF) ─────────────────────────────────────────────────
 
-  function buildFormatToggle(container) {
+  // onChange() is called after the user switches format, so callers can re-label buttons
+  function buildFormatToggle(container, onChange) {
     const wrap = document.createElement('div');
     wrap.style.cssText = `
       display:flex; align-items:center; gap:0;
@@ -372,14 +428,10 @@
         background: 'transparent', color: '#555'
       });
       btn.onclick = () => {
+        if (isDownloading) return; // the running job keeps the mode it started with
         outputMode = mode;
         updateToggle();
-        // update the main download button label
-        const dlSelBtn = document.getElementById('zbw-dl-sel-btn');
-        if (dlSelBtn) {
-          const n = parseInt(dlSelBtn.dataset.count || '0', 10);
-          refreshDlBtnLabel(dlSelBtn, n);
-        }
+        if (onChange) onChange();
       };
       return btn;
     }
@@ -486,7 +538,7 @@
     if (!chapters.length) { setStatus('找不到章節 No chapters found.'); return; }
 
     // Format toggle
-    buildFormatToggle(controls);
+    buildFormatToggle(controls, () => updateCount());
 
     // ── Toolbar ───────────────────────────────────────────────────────────────
     const toolbar = document.createElement('div');
@@ -523,7 +575,6 @@
     // Download Selected button
     const dlSelBtn = document.createElement('button');
     dlSelBtn.id = 'zbw-dl-sel-btn';
-    dlSelBtn.dataset.count = '0';
     Object.assign(dlSelBtn.style, {
       width: '100%', padding: '9px',
       background: '#007bff', color: '#fff',
@@ -594,28 +645,34 @@
 
     function updateCount() {
       const n = getChecked().length;
-      dlSelBtn.dataset.count = String(n);
       countLbl.textContent = n === 0
         ? '未選擇任何章節 No chapters selected'
         : `已選 ${n} 章 / ${n} chapter${n > 1 ? 's' : ''} selected`;
       refreshDlBtnLabel(dlSelBtn, n);
     }
 
+    // Matches on the chapter's number rather than its raw label, so "1-3" selects
+    // "01", "02", "第3話"; ranges are inclusive and may be written backwards
     function applyRange() {
       const raw = rangeInput.value.trim();
       if (!raw) return;
-      const targets = new Set();
-      raw.split(',').forEach(part => {
+      const ranges = [];
+      raw.split(/[,，]/).forEach(part => {
         part = part.trim();
-        const m = part.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+        const m = part.match(/^(\d+(?:\.\d+)?)\s*[-–~]\s*(\d+(?:\.\d+)?)$/);
         if (m) {
-          for (let i = parseInt(m[1], 10); i <= parseInt(m[2], 10); i++) targets.add(String(i));
-        } else if (/^\d+$/.test(part)) {
-          targets.add(part);
+          const a = parseFloat(m[1]), b = parseFloat(m[2]);
+          ranges.push([Math.min(a, b), Math.max(a, b)]);
+        } else if (/^\d+(?:\.\d+)?$/.test(part)) {
+          const n = parseFloat(part);
+          ranges.push([n, n]);
         }
       });
-      if (!targets.size) return;
-      chapters.forEach(ch => { chapterRows.get(ch.zjid).cb.checked = targets.has(ch.label); });
+      if (!ranges.length) { setStatus('⚠️ 範圍格式無效 Invalid range, e.g. 1-5, 8'); return; }
+      chapters.forEach(ch => {
+        const n = chapterNumber(ch.label);
+        chapterRows.get(ch.zjid).cb.checked = ranges.some(([lo, hi]) => n >= lo && n <= hi);
+      });
       updateCount();
     }
 
@@ -631,68 +688,82 @@
       dlSelBtn.disabled = true;
 
       const mode = outputMode;
+      let chaptersFailed = 0;
 
-      // Pre-fetch all image lists in parallel
-      setStatus(`📡 正在獲取 ${selected.length} 個章節的頁面列表… / Fetching page lists…`);
-      const imageMap = new Map();
-      await Promise.all(selected.map(async ch => {
-        try {
-          imageMap.set(ch.zjid, await fetchChapterImageUrls(ch.zjid));
-        } catch (err) {
-          imageMap.set(ch.zjid, []);
+      try {
+        // Pre-fetch image lists, a few chapters at a time to avoid flooding the site
+        setStatus(`📡 正在獲取 ${selected.length} 個章節的頁面列表… / Fetching page lists…`);
+        const imageMap = new Map();
+        await pool(selected.map(ch => async () => {
+          try {
+            imageMap.set(ch.zjid, await fetchChapterImageUrls(ch.zjid));
+          } catch (err) {
+            console.warn('[zbw-dl] page list failed:', ch.zjid, err.message);
+            imageMap.set(ch.zjid, []);
+          }
+        }), CONCURRENT_DOWNLOADS);
+
+        // PDF progress doubles (fetch + build); JPG is single phase
+        const unitsFor = ch => (imageMap.get(ch.zjid)?.length || 0) * (mode === 'pdf' ? 2 : 1);
+        const grandTotal = selected.reduce((sum, ch) => sum + unitsFor(ch), 0);
+        let finishedUnits = 0; // units of chapters already completed (or skipped)
+        setProgress(0, grandTotal);
+
+        for (const ch of selected) {
+          if (abortFlag) break;
+
+          const { row, badge } = chapterRows.get(ch.zjid);
+          const imageUrls = imageMap.get(ch.zjid) || [];
+
+          if (!imageUrls.length) {
+            badge.textContent = '❌'; badge.title = '找不到圖片 No images (login/VIP required?)';
+            row.style.background = row._baseColor = '#fff0f0';
+            chaptersFailed++;
+            continue;
+          }
+
+          badge.textContent = '⏳';
+          row.style.background = row._baseColor = '#fff8e1';
+
+          try {
+            const result = await downloadChapter(ch.zjid, ch.label, imageUrls, mode,
+              (done, total, failed) => {
+                const overall = finishedUnits + done;
+                setProgress(overall, grandTotal);
+                setStatus(
+                  `第${ch.label}章 Ch.${ch.label}: ${done}/${total}` +
+                  (failed ? ` (${failed} ❌)` : '') +
+                  ` — 合計 total ${overall}/${grandTotal}`
+                );
+              }
+            );
+            const ok = result.failed === 0;
+            if (!ok) chaptersFailed++;
+            badge.textContent = ok ? '✅' : `⚠️${result.failed}`;
+            badge.title = `${result.done - result.failed}/${result.total} 頁 pages`;
+            row.style.background = row._baseColor = ok ? '#f0fff4' : '#fff3cd';
+          } catch (err) {
+            chaptersFailed++;
+            badge.textContent = abortFlag ? '⛔' : '❌'; badge.title = err.message;
+            row.style.background = row._baseColor = '#fff0f0';
+          }
+
+          finishedUnits += unitsFor(ch);
+          await sleep(CHAPTER_GAP_MS);
         }
-      }));
 
-      // PDF progress doubles (fetch + build); JPG is single phase
-      globalTotal = selected.reduce((s, ch) => {
-        const n = imageMap.get(ch.zjid)?.length || 0;
-        return s + (mode === 'pdf' ? n * 2 : n);
-      }, 0);
-      globalDone = 0;
-      setProgress(0, globalTotal);
-
-      for (const ch of selected) {
-        if (abortFlag) { setStatus('⛔ 已中止 Aborted.'); break; }
-
-        const { row, badge } = chapterRows.get(ch.zjid);
-        const imageUrls = imageMap.get(ch.zjid) || [];
-
-        if (!imageUrls.length) {
-          badge.textContent = '❌'; badge.title = 'No images';
-          continue;
-        }
-
-        badge.textContent = '⏳';
-        row.style.background = row._baseColor = '#fff8e1';
-
-        try {
-          const result = await downloadChapter(ch.zjid, ch.label, imageUrls, mode,
-            (done, total, failed) => {
-              globalDone++;
-              setProgress(globalDone, globalTotal);
-              setStatus(
-                `第${ch.label}章 Ch.${ch.label}: ${done}/${total}` +
-                (failed ? ` (${failed} ❌)` : '') +
-                ` — 合計 total ${globalDone}/${globalTotal}`
-              );
-            }
-          );
-          const ok = result.failed === 0;
-          badge.textContent = ok ? '✅' : `⚠️${result.failed}`;
-          badge.title = `${result.done - result.failed}/${result.total} 頁 pages`;
-          row.style.background = row._baseColor = ok ? '#f0fff4' : '#fff3cd';
-        } catch (err) {
-          badge.textContent = '❌'; badge.title = err.message;
-          row.style.background = row._baseColor = '#fff0f0';
-        }
-
-        await sleep(CHAPTER_GAP_MS);
+        if (abortFlag) setStatus('⛔ 已中止 Aborted.');
+        else if (chaptersFailed) setStatus(`⚠️ 完成，但有 ${chaptersFailed} 章出錯 Done with ${chaptersFailed} problem chapter(s) — hover the badges for details`);
+        else setStatus(mode === 'pdf'
+          ? '✅ 完成 Done — PDF 已儲存 PDFs saved'
+          : '✅ 完成 Done — 檔案已儲存至 Files saved to ~/Downloads');
+      } catch (err) {
+        setStatus(`❌ ${err.message}`);
+      } finally {
+        hideProgress();
+        isDownloading     = false;
+        dlSelBtn.disabled = false;
       }
-
-      setStatus(`✅ 完成 Done — 檔案已儲存至 Files saved to ~/Downloads`);
-      hideProgress();
-      isDownloading     = false;
-      dlSelBtn.disabled = false;
     };
 
     setStatus(`找到 ${chapters.length} 個章節 / Found ${chapters.length} chapter(s). Select and download.`);
@@ -710,7 +781,7 @@
     setStatus(`閱讀頁面 — 第 "${label}" 章 / Viewer — chapter "${label}"`);
 
     // Format toggle
-    buildFormatToggle(controls);
+    buildFormatToggle(controls, () => updateViewerBtn());
 
     const note = document.createElement('div');
     note.textContent = `⚡ ${CONCURRENT_DOWNLOADS} 個平行下載 parallel downloads`;
@@ -733,11 +804,6 @@
     }
     updateViewerBtn();
 
-    // Re-label whenever format toggle changes
-    const origBuildFormatToggle = buildFormatToggle;
-    const modeObserver = new MutationObserver(updateViewerBtn);
-    modeObserver.observe(controls, { childList: true, subtree: true });
-
     dlBtn.onclick = async () => {
       if (isDownloading) return;
       isDownloading  = true;
@@ -756,18 +822,21 @@
             setStatus(`第${label}章 Ch.${label}: ${done}/${total}`);
           }
         );
-        setStatus(`✅ 第${label}章: ${result.done - result.failed}/${result.total} 頁已儲存 pages saved`);
+        setStatus(abortFlag
+          ? '⛔ 已中止 Aborted.'
+          : `✅ 第${label}章: ${result.done - result.failed}/${result.total} 頁已儲存 pages saved`);
       } catch (err) {
-        setStatus(`❌ ${err.message}`);
+        setStatus(abortFlag ? '⛔ 已中止 Aborted.' : `❌ ${err.message}`);
+      } finally {
+        hideProgress();
+        isDownloading    = false;
+        dlBtn.disabled   = false;
+        updateViewerBtn();
       }
-
-      hideProgress();
-      isDownloading    = false;
-      dlBtn.disabled   = false;
-      updateViewerBtn();
     };
 
     controls.appendChild(dlBtn);
+    controls.appendChild(makeBtn('⛔ 中止 Abort', '#dc3545', () => { abortFlag = true; }));
   }
 
   // ── Init ──────────────────────────────────────────────────────────────────────
