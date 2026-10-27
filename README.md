@@ -4,6 +4,10 @@ A Tampermonkey userscript that downloads manga chapters from [zerobywai.com](htt
 
 > **Fork note:** This is a community patch of [Mccranky83/byw-mangadl](https://github.com/Mccranky83/byw-mangadl), rewritten to support the site's new PC frontend (`/pc/details/` and `/pc/view/`), and fixed for Firefox + Tampermonkey compatibility.
 
+> **📌 Merging upstream:** After the site's redesign broke the original script, I still wanted to download manga to read on my Kindle, so I asked Claude (an AI assistant) to fix it for the new site. I'm now trying to merge this work back into [Mccranky83/byw-mangadl](https://github.com/Mccranky83/byw-mangadl) so it lives in one place. Once it's merged, please install from there; this repository will then be retired.
+>
+> 網站改版後原腳本失效，而我仍想下載漫畫推送到 Kindle 閱讀，於是請 Claude（AI 助手）協助修正。現正嘗試把這些改動合併回原作者的 [Mccranky83/byw-mangadl](https://github.com/Mccranky83/byw-mangadl)，合併後請改從該項目安裝，本倉庫屆時將停止維護。
+
 ---
 
 ## Install
@@ -128,7 +132,7 @@ To reuse a Chromium you already have, set `CHROMIUM_PATH=/path/to/chrome`. Tests
 
 ## Contributing
 
-Pull requests are welcome. If the site updates and the script breaks, please [open an issue](../../issues) with:
+This work is being proposed for merging into [Mccranky83/byw-mangadl](https://github.com/Mccranky83/byw-mangadl). Once that happens, please contribute there instead. Until then, pull requests here are welcome. If the site updates and the script breaks, please [open an issue](../../issues) with:
 - The URL that is no longer working
 - What you see vs. what you expect
 - Browser and Tampermonkey version
