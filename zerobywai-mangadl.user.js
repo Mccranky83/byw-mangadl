@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         zerobywai 漫畫下載
-// @version      1.3.0
+// @version      1.4.0
 // @namespace    https://github.com/jyltsang/zerobywai-downloader
 // @description  Download manga chapters from zerobywai.com — JPG per page or PDF per chapter, bulk selection, parallel downloads
 // @author       Mccranky83 (original); patched for new site structure
@@ -18,6 +18,11 @@
 // ==/UserScript==
 
 /*
+  v1.4.0 — Pause/resume and remembered format
+  ─────────────────────────────────────────────
+  • ⏸ Pause / ▶ Resume button next to Abort (in-flight requests finish first)
+  • The JPG/PDF choice is remembered between visits
+
   v1.3.0 — Reliability fixes
   ────────────────────────────
   • Viewer page no longer freezes the tab (self-triggering MutationObserver removed)
@@ -57,11 +62,27 @@
   // ── State ─────────────────────────────────────────────────────────────────────
   let isDownloading = false;
   let abortFlag     = false;
-  let outputMode    = 'jpg'; // 'jpg' | 'pdf'
+  let isPaused      = false;
+  let outputMode    = loadOutputMode(); // 'jpg' | 'pdf'
 
   // ── Utilities ─────────────────────────────────────────────────────────────────
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  // Storage can throw (private windows, blocked site data), so failures fall back
+  // to the default rather than breaking the script
+  const FORMAT_KEY = 'zbw-dl-format';
+  function loadOutputMode() {
+    try { return localStorage.getItem(FORMAT_KEY) === 'pdf' ? 'pdf' : 'jpg'; } catch { return 'jpg'; }
+  }
+  function saveOutputMode(mode) {
+    try { localStorage.setItem(FORMAT_KEY, mode); } catch { /* not persisted */ }
+  }
+
+  // Resolves once the user resumes (or aborts); called before each new request
+  async function waitWhilePaused() {
+    while (isPaused && !abortFlag) await sleep(200);
+  }
 
   function safeFilename(s) {
     return (s || 'manga').replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ').trim();
@@ -100,6 +121,7 @@
         const delay = RETRY_BASE_MS * 2 ** attempt;
         console.warn(`[zbw-dl] ${what} failed (${err.message}), retry ${attempt + 1}/${MAX_RETRIES} in ${delay} ms`);
         await sleep(delay);
+        await waitWhilePaused();
       }
     }
   }
@@ -116,6 +138,7 @@
     let idx = 0;
     async function worker() {
       while (idx < tasks.length) {
+        await waitWhilePaused();
         if (abortFlag) return;
         await tasks[idx++]();
       }
@@ -194,6 +217,7 @@
     let doc = null;
 
     for (let i = 0; i < imageBuffers.length; i++) {
+      await waitWhilePaused();
       if (abortFlag) throw new Error('Aborted');
 
       // jsPDF accepts raw bytes and detects JPEG/PNG/WebP from the file header,
@@ -402,6 +426,29 @@
     return btn;
   }
 
+  // ── Run controls (Pause / Abort) ──────────────────────────────────────────────
+
+  function setPaused(val) {
+    isPaused = val;
+    document.querySelectorAll('.zbw-pause-btn').forEach(btn => {
+      btn.textContent = isPaused ? '▶ 繼續 Resume' : '⏸ 暫停 Pause';
+      btn.style.background = isPaused ? '#28a745' : '#6c757d';
+    });
+    if (isPaused && isDownloading) setStatus('⏸ 已暫停 Paused — 進行中的請求會先完成 in-flight requests will finish first');
+  }
+
+  function buildRunControls(container) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:5px;';
+    const pauseBtn = makeBtn('', '#6c757d', () => { if (isDownloading) setPaused(!isPaused); });
+    pauseBtn.className = 'zbw-pause-btn';
+    const abortBtn = makeBtn('⛔ 中止 Abort', '#dc3545', () => { abortFlag = true; setPaused(false); });
+    pauseBtn.style.flex = abortBtn.style.flex = '1';
+    row.append(pauseBtn, abortBtn);
+    container.appendChild(row);
+    setPaused(false);
+  }
+
   // ── Format toggle (JPG / PDF) ─────────────────────────────────────────────────
 
   // onChange() is called after the user switches format, so callers can re-label buttons
@@ -430,6 +477,7 @@
       btn.onclick = () => {
         if (isDownloading) return; // the running job keeps the mode it started with
         outputMode = mode;
+        saveOutputMode(mode);
         updateToggle();
         if (onChange) onChange();
       };
@@ -587,7 +635,7 @@
     refreshDlBtnLabel(dlSelBtn, 0);
     controls.appendChild(dlSelBtn);
 
-    controls.appendChild(makeBtn('⛔ 中止 Abort', '#dc3545', () => { abortFlag = true; }));
+    buildRunControls(controls);
 
     // Concurrency note
     const note = document.createElement('div');
@@ -710,6 +758,7 @@
         setProgress(0, grandTotal);
 
         for (const ch of selected) {
+          await waitWhilePaused();
           if (abortFlag) break;
 
           const { row, badge } = chapterRows.get(ch.zjid);
@@ -761,6 +810,7 @@
         setStatus(`❌ ${err.message}`);
       } finally {
         hideProgress();
+        setPaused(false);
         isDownloading     = false;
         dlSelBtn.disabled = false;
       }
@@ -829,6 +879,7 @@
         setStatus(abortFlag ? '⛔ 已中止 Aborted.' : `❌ ${err.message}`);
       } finally {
         hideProgress();
+        setPaused(false);
         isDownloading    = false;
         dlBtn.disabled   = false;
         updateViewerBtn();
@@ -836,7 +887,7 @@
     };
 
     controls.appendChild(dlBtn);
-    controls.appendChild(makeBtn('⛔ 中止 Abort', '#dc3545', () => { abortFlag = true; }));
+    buildRunControls(controls);
   }
 
   // ── Init ──────────────────────────────────────────────────────────────────────

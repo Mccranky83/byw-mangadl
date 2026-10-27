@@ -30,12 +30,12 @@ https://www.zerobywai.com/pc/details/?kuid=20119
 
 A **📥 button** appears on the right edge of the screen. Click it (or press **Ctrl/Cmd + O**) to open the download panel.
 
-1. Choose the output format: **🖼 JPG** (one file per page) or **📄 PDF** (one file per chapter).
+1. Choose the output format: **🖼 JPG** (one file per page) or **📄 PDF** (one file per chapter). Your choice is remembered.
 2. Tick the chapters you want, or use the toolbar:
    - **☑ All** / **☐ None** — select or clear every chapter
    - **Range box** — type e.g. `1-5, 8, 10-12` and press **Go** or Enter. Ranges match the chapter *number*, so `1-3` selects `01`, `02` and `第3話`; reversed ranges such as `12-10` also work.
 3. Click **⬇ Download Selected**. Chapters are processed one after another, with several pages fetched in parallel.
-4. **⛔ Abort** stops the run after the requests already in flight.
+4. **⏸ Pause** holds new requests until you press **▶ Resume**; **⛔ Abort** stops the run. In both cases, requests already in flight finish first.
 
 Each chapter row shows its result: ✅ complete, ⚠️*n* with *n* missing pages, ❌ failed. Hover over a badge for details. Failed requests are retried up to three times with back-off before a page is counted as missing.
 
@@ -111,6 +111,20 @@ The first time the script runs, Firefox may show a permission bar asking whether
 | Greasemonkey | ❌ Not supported (`GM_download` unavailable) |
 
 ---
+
+## Development
+
+The script is a single file with no build step: edit `zerobywai-mangadl.user.js` and reinstall it in Tampermonkey.
+
+Automated tests load the script into Chromium against a mocked copy of the site (no real network traffic):
+
+```sh
+npm install
+npx playwright install chromium   # once
+npm test
+```
+
+To reuse a Chromium you already have, set `CHROMIUM_PATH=/path/to/chrome`. Tests also run on every push and pull request through GitHub Actions.
 
 ## Contributing
 
