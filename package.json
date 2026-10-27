@@ -1,0 +1,14 @@
+{
+  "name": "zerobywai-mangadl",
+  "version": "1.4.0",
+  "private": true,
+  "description": "Tampermonkey userscript that downloads manga chapters from zerobywai.com",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "jspdf": "2.5.1",
+    "playwright": "^1.47.0"
+  }
+}
