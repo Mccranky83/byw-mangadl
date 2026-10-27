@@ -1,6 +1,6 @@
 {
-  "name": "zerobywai-mangadl",
-  "version": "1.4.0",
+  "name": "byw-mangadl",
+  "version": "2.0.0",
   "private": true,
   "description": "Tampermonkey userscript that downloads manga chapters from zerobywai.com",
   "license": "MIT",
